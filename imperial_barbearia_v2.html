@@ -1,0 +1,2919 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0D0D0D" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Imperial" />
+  <title>Imperial Barbearia — Gestão</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js para os gráficos do Dashboard -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Fontes: Cinzel (clássica para o nome Imperial) + Inter (limpa para interface) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            serif: ['Cinzel', 'serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            obsidian: '#0D0D0D',
+            charcoal: '#161616',
+            graphite: '#1F1F1F',
+            stroke: '#282828',
+            silver: '#F2F2F2',
+            muted: '#9E9E9E',
+            imperial: {
+              DEFAULT: '#8B151B',
+              hover: '#A61C23',
+              soft: 'rgba(139, 21, 27, 0.16)',
+            },
+            olive: {
+              DEFAULT: '#3D4F2F',
+              light: '#6F8A59',
+              soft: 'rgba(61, 79, 47, 0.22)',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0D0D0D;
+      color: #F2F2F2;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0D0D0D;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #282828;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3D3D3D;
+    }
+
+    /* ---------- Adaptação mobile / app ---------- */
+    html {
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain; /* evita o "puxar pra recarregar" nativo; usamos o nosso */
+    }
+    body { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { scrollbar-width: none; }
+
+    @media (max-width: 639px) {
+      /* 16px evita o zoom automático do iOS ao focar em campos */
+      input, select, textarea { font-size: 16px !important; }
+      main { padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important; padding-top: 1.25rem !important; }
+      ::-webkit-scrollbar { display: none; }
+    }
+    @media (pointer: coarse) {
+      .nav-btn, .cfg-sub-btn, .agenda-filter-btn { min-height: 40px; }
+      input:not([type=checkbox]), select { min-height: 44px; }
+    }
+
+    @keyframes slideInRight { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+    @keyframes slideInLeft  { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+    .anim-from-right { animation: slideInRight .22s ease-out; }
+    .anim-from-left  { animation: slideInLeft .22s ease-out; }
+
+    @keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
+    .sheet-anim { animation: sheetUp .22s ease-out; }
+    @media (min-width: 640px) { .sheet-anim { animation: none; } }
+
+    .swipe-front { transition: transform .2s ease; will-change: transform; touch-action: pan-y; }
+    .swipe-front.dragging { transition: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .8s linear infinite; }
+
+    #bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
+    .bnav-btn { transition: color .15s ease; }
+    .bnav-btn .bnav-pill { transition: background-color .15s ease; }
+  </style>
+</head>
+<body class="bg-obsidian text-silver min-h-screen flex flex-col antialiased selection:bg-imperial selection:text-white">
+
+  <!-- Toast discreto -->
+  <div id="toast-container" class="fixed bottom-[calc(84px+env(safe-area-inset-bottom))] sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 flex flex-col items-stretch sm:items-end gap-2 pointer-events-none"></div>
+
+  <!-- Indicador de "puxar para atualizar" -->
+  <div id="ptr-indicator" class="fixed left-1/2 z-40 -translate-x-1/2 pointer-events-none opacity-0" style="top: calc(env(safe-area-inset-top) + 64px);">
+    <div class="w-9 h-9 rounded-full bg-charcoal border border-stroke shadow-xl flex items-center justify-center">
+      <svg id="ptr-icon" class="w-4 h-4 text-silver" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M5.6 15A8 8 0 0018.4 9M18.4 9A8 8 0 005.6 15"/></svg>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação (vira bottom sheet no celular; arraste para baixo para fechar) -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4">
+    <div id="confirm-sheet" class="sheet-anim bg-charcoal border border-stroke rounded-t-3xl sm:rounded-2xl max-w-none sm:max-w-sm w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6 shadow-2xl">
+      <div class="sm:hidden mx-auto mb-4 h-1 w-10 rounded-full bg-stroke"></div>
+      <h3 id="confirm-title" class="text-base font-semibold text-silver mb-1.5">Confirmar Ação</h3>
+      <p id="confirm-message" class="text-xs text-muted leading-relaxed mb-6">Tem certeza que deseja continuar?</p>
+      <div class="flex justify-end gap-2.5">
+        <button id="confirm-cancel-btn" class="px-4 py-2 rounded-xl bg-graphite hover:bg-neutral-800 text-muted hover:text-silver text-xs font-medium transition">Cancelar</button>
+        <button id="confirm-ok-btn" class="px-4 py-2 rounded-xl bg-imperial hover:bg-imperial-hover text-white text-xs font-semibold transition">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cabeçalho Minimalista Imperial Barbearia -->
+  <header class="bg-obsidian/90 border-b border-stroke sticky top-0 z-30 backdrop-blur-md pt-[env(safe-area-inset-top)]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex flex-row items-center justify-between py-3 sm:py-3.5 gap-3">
+        <!-- Identidade Visual da Logo -->
+        <div class="flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-charcoal border border-stroke flex items-center justify-center shrink-0">
+            <!-- Coroa Minimalista em Prata e Bordô -->
+            <svg class="w-6 h-6" viewBox="0 0 32 32" fill="none">
+              <path d="M5 22L3.5 11L10.5 15.5L16 8L21.5 15.5L28.5 11L27 22H5Z" fill="#8B151B" stroke="#D4D4D4" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="M6 25H26" stroke="#D4D4D4" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="16" cy="5.5" r="1.3" fill="#D4D4D4"/>
+              <circle cx="3.5" cy="9.5" r="1.1" fill="#D4D4D4"/>
+              <circle cx="28.5" cy="9.5" r="1.1" fill="#D4D4D4"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="font-serif text-base sm:text-lg font-bold tracking-[0.14em] text-silver leading-none">IMPERIAL</h1>
+            <p class="font-serif text-[10px] tracking-[0.28em] text-muted mt-1">BARBEARIA</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+        <!-- Status da sincronização com o GitHub -->
+        <button type="button" onclick="onSyncBadgeClick()" id="sync-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-charcoal border border-stroke text-[11px] text-muted hover:text-silver transition" title="Sincronização GitHub">
+          <span id="sync-dot" class="w-2 h-2 rounded-full bg-neutral-600"></span>
+          <span id="sync-badge-label">Local</span>
+        </button>
+
+        <!-- Navegação Limpa (desktop/tablet; no celular usa a barra inferior) -->
+        <nav class="hidden sm:flex items-center gap-1.5 bg-charcoal p-1 rounded-xl border border-stroke" aria-label="Navegação Principal">
+          <button onclick="switchTab('tab-menu')" id="nav-tab-menu" class="nav-btn px-3.5 py-2 rounded-lg text-xs font-medium transition-all">
+            1. Menu
+          </button>
+          <button onclick="switchTab('tab-agenda')" id="nav-tab-agenda" class="nav-btn px-3.5 py-2 rounded-lg text-xs font-medium transition-all">
+            2. Agenda
+          </button>
+          <button onclick="switchTab('tab-dashboard')" id="nav-tab-dashboard" class="nav-btn px-3.5 py-2 rounded-lg text-xs font-medium transition-all">
+            3. Dashboard
+          </button>
+          <button onclick="switchTab('tab-config')" id="nav-tab-config" class="nav-btn px-3.5 py-2 rounded-lg text-xs font-medium transition-all">
+            4. Config
+          </button>
+        </nav>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Barra de navegação inferior (celular) -->
+  <nav id="bottom-nav" class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-obsidian/95 backdrop-blur-md border-t border-stroke" aria-label="Navegação Principal">
+    <div class="grid grid-cols-4 px-2 pt-1.5 pb-1.5">
+      <button onclick="switchTab('tab-menu')" id="bnav-tab-menu" class="bnav-btn flex flex-col items-center gap-1 py-1 text-muted">
+        <span class="bnav-pill w-14 h-7 rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+        </span>
+        <span class="text-[10px] font-medium">Lançar</span>
+      </button>
+      <button onclick="switchTab('tab-agenda')" id="bnav-tab-agenda" class="bnav-btn flex flex-col items-center gap-1 py-1 text-muted">
+        <span class="bnav-pill w-14 h-7 rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z"/></svg>
+        </span>
+        <span class="text-[10px] font-medium">Agenda</span>
+      </button>
+      <button onclick="switchTab('tab-dashboard')" id="bnav-tab-dashboard" class="bnav-btn flex flex-col items-center gap-1 py-1 text-muted">
+        <span class="bnav-pill w-14 h-7 rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12A9 9 0 1112 3v9h9z"/></svg>
+        </span>
+        <span class="text-[10px] font-medium">Resultados</span>
+      </button>
+      <button onclick="switchTab('tab-config')" id="bnav-tab-config" class="bnav-btn flex flex-col items-center gap-1 py-1 text-muted">
+        <span class="bnav-pill w-14 h-7 rounded-full flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.3 4.3a1.7 1.7 0 013.4 0l.2.9a1.7 1.7 0 002.5 1l.8-.5a1.7 1.7 0 012.4 2.4l-.5.8a1.7 1.7 0 001 2.5l.9.2a1.7 1.7 0 010 3.4l-.9.2a1.7 1.7 0 00-1 2.5l.5.8a1.7 1.7 0 01-2.4 2.4l-.8-.5a1.7 1.7 0 00-2.5 1l-.2.9a1.7 1.7 0 01-3.4 0l-.2-.9a1.7 1.7 0 00-2.5-1l-.8.5a1.7 1.7 0 01-2.4-2.4l.5-.8a1.7 1.7 0 00-1-2.5l-.9-.2a1.7 1.7 0 010-3.4l.9-.2a1.7 1.7 0 001-2.5l-.5-.8A1.7 1.7 0 017.4 5.7l.8.5a1.7 1.7 0 002.5-1z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        <span class="text-[10px] font-medium">Config</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Conteúdo Principal -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
+
+    <!-- ===================================================================== -->
+    <!-- PÁGINA 1: MENU DE LANÇAMENTO (COLUNA ÚNICA CENTRALIZADA E LIMPA)      -->
+    <!-- ===================================================================== -->
+    <section id="tab-menu" class="tab-content max-w-2xl mx-auto space-y-6">
+      
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-silver">Novo Atendimento</h2>
+          <p class="text-xs text-muted mt-0.5">Preencha os dados para registrar na agenda.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="editing-indicator" class="hidden text-[11px] px-2.5 py-1 rounded-full bg-imperial-soft text-red-300 border border-imperial/40">Editando registro</span>
+          <button type="button" onclick="resetMenuForm()" class="text-xs text-muted hover:text-silver transition">
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <!-- Aviso discreto apenas se o catálogo ainda não tiver nada -->
+      <div id="empty-catalog-hint" class="hidden bg-charcoal border border-stroke rounded-2xl p-4 flex items-center justify-between gap-4">
+        <p class="text-xs text-muted">Nenhum serviço ou pagamento cadastrado ainda.</p>
+        <button type="button" onclick="switchTab('tab-config')" class="text-xs font-semibold text-silver underline hover:text-white whitespace-nowrap">
+          Cadastrar em Config →
+        </button>
+      </div>
+
+      <form id="launch-form" onsubmit="handleSaveAppointment(event)" class="bg-charcoal border border-stroke rounded-2xl divide-y divide-stroke">
+        
+        <!-- Etapa 1: Cliente, Data e Horário -->
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Data</label>
+              <input type="date" id="form-date" required onchange="onFormDateChange()" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-xs text-muted">
+                  Horário
+                  <span id="available-count-badge" class="ml-1.5 text-[10px] px-2 py-0.5 rounded-full bg-olive-soft text-olive-light"></span>
+                </label>
+                <button type="button" onclick="toggleCustomTimeMode()" id="toggle-custom-time-btn" class="text-[11px] text-muted hover:text-silver underline transition">
+                  Digitar horário
+                </button>
+              </div>
+
+              <div id="form-time-select-wrapper">
+                <select id="form-time" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver focus:outline-none focus:border-neutral-500 transition">
+                </select>
+              </div>
+
+              <div id="form-time-custom-wrapper" class="hidden space-y-2">
+                <input type="time" id="form-time-custom" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver focus:outline-none focus:border-neutral-500 transition" />
+                <label class="flex items-center gap-2 text-[11px] text-muted cursor-pointer">
+                  <input type="checkbox" id="form-save-custom-slot" checked class="rounded bg-obsidian border-stroke text-imperial focus:ring-0" />
+                  <span>Salvar horário na grade fixa</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Nome do Cliente</label>
+              <input type="text" id="form-name" required placeholder="Nome completo ou apelido" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Contato <span class="text-neutral-600">(opcional)</span></label>
+              <input type="text" id="form-contact" placeholder="(00) 00000-0000" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Etapa 2: Serviço Principal e Variação (Progressive Disclosure) -->
+        <div class="p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-silver">Serviço Principal</span>
+            <span class="text-[11px] text-muted">Selecione uma opção</span>
+          </div>
+
+          <div id="menu-services-container" class="flex flex-wrap gap-2"></div>
+
+          <!-- Variações: só aparecem se a categoria selecionada tiver variações -->
+          <div id="menu-variations-wrapper" class="hidden pt-3 border-t border-stroke/70 space-y-2.5">
+            <span id="menu-variations-title" class="block text-[11px] text-muted">Variação do serviço</span>
+            <div id="menu-variations-container" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <!-- Etapa 3: Acordeão Discreto para Extras e Produtos -->
+        <div class="p-6">
+          <button type="button" onclick="toggleExtrasAccordion()" class="w-full flex items-center justify-between text-left group">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-silver group-hover:text-white transition">+ Adicionar Serviços Extras ou Produtos</span>
+              <span id="extras-products-badge" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-graphite text-muted border border-stroke"></span>
+            </div>
+            <svg id="accordion-chevron" class="w-4 h-4 text-muted transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <div id="menu-extras-products-panel" class="hidden mt-5 pt-5 border-t border-stroke/70 space-y-5">
+            <!-- Serviços Extras -->
+            <div class="space-y-2.5">
+              <span class="block text-[11px] text-muted">Serviços Extras</span>
+              <div id="menu-extras-container" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <!-- Produtos -->
+            <div class="space-y-2.5">
+              <span class="block text-[11px] text-muted">Produtos</span>
+              <div id="menu-products-container" class="space-y-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Etapa 4: Fechamento Minimalista -->
+        <div class="p-6 bg-obsidian/40 rounded-b-2xl space-y-5">
+          <div id="menu-summary-list" class="text-xs text-muted flex flex-wrap gap-x-3 gap-y-1"></div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Forma de Pagamento</label>
+              <div id="menu-payments-container" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Valor Total (R$)</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted text-sm">R$</span>
+                <input type="number" step="0.01" min="0" id="form-total" required value="0.00" class="w-full bg-obsidian border border-stroke rounded-xl pl-10 pr-4 py-2.5 text-base font-semibold text-silver focus:outline-none focus:border-neutral-500 transition" />
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" id="form-submit-btn" class="w-full py-3 px-5 rounded-xl bg-imperial hover:bg-imperial-hover active:scale-[0.99] text-white font-semibold text-sm tracking-wide transition">
+            Salvar Lançamento
+          </button>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- PÁGINA 2: AGENDA E CONTROLE                                           -->
+    <!-- ===================================================================== -->
+    <section id="tab-agenda" class="tab-content hidden space-y-6">
+      
+      <!-- Topo Limpo: Filtro de Período + Data + Resumo -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-1 bg-charcoal p-1 rounded-xl border border-stroke self-start">
+          <button onclick="setAgendaFilter('daily')" id="filter-daily" class="agenda-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            Diário
+          </button>
+          <button onclick="setAgendaFilter('weekly')" id="filter-weekly" class="agenda-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            Semana
+          </button>
+          <button onclick="setAgendaFilter('monthly')" id="filter-monthly" class="agenda-filter-btn px-3.5 py-1.5 rounded-lg text-xs font-medium transition">
+            Mês
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="shiftAgendaDate(-1)" class="p-2 rounded-xl bg-charcoal hover:bg-graphite border border-stroke text-muted hover:text-silver transition" title="Anterior">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <input type="date" id="agenda-date-picker" onchange="renderAgenda()" class="bg-charcoal border border-stroke rounded-xl px-3 py-1.5 text-xs font-medium text-silver focus:outline-none focus:border-neutral-500" />
+          <button onclick="shiftAgendaDate(1)" class="p-2 rounded-xl bg-charcoal hover:bg-graphite border border-stroke text-muted hover:text-silver transition" title="Próximo">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <button onclick="setAgendaToday()" class="px-3 py-2 rounded-xl bg-charcoal hover:bg-graphite border border-stroke text-xs text-muted hover:text-silver transition">
+            Hoje
+          </button>
+        </div>
+      </div>
+
+      <!-- Grade Principal: Tabela (Esquerda) + Horários Disponíveis (Direita) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Tabela Principal -->
+        <div class="order-2 lg:order-1 lg:col-span-9 bg-charcoal border border-stroke rounded-2xl overflow-hidden">
+          <div class="px-5 py-4 border-b border-stroke flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 id="agenda-period-title" class="text-sm font-semibold text-silver">Registros do Dia</h2>
+              <p id="agenda-period-subtitle" class="text-xs text-muted mt-0.5"></p>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span id="agenda-count-label" class="text-muted">0 atendimentos</span>
+              <span class="text-stroke">•</span>
+              <span id="agenda-total-label" class="font-semibold text-silver">R$ 0,00</span>
+            </div>
+          </div>
+
+          <!-- Celular: cards com "arrastar para o lado" (Editar / Excluir) -->
+          <div id="agenda-cards" class="md:hidden p-3 space-y-2.5"></div>
+
+          <div class="hidden md:block overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-stroke text-[11px] font-medium text-muted bg-obsidian/40">
+                  <th class="py-3 px-4">Data</th>
+                  <th class="py-3 px-4">Horário</th>
+                  <th class="py-3 px-4">Nome</th>
+                  <th class="py-3 px-4">Serviço/Produto</th>
+                  <th class="py-3 px-4">Serviço Extra</th>
+                  <th class="py-3 px-4">Produtos</th>
+                  <th class="py-3 px-4">Contato</th>
+                  <th class="py-3 px-4">Valor</th>
+                  <th class="py-3 px-4">Pagamento</th>
+                  <th class="py-3 px-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="agenda-table-body" class="divide-y divide-stroke/60 text-xs">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Painel Lateral Enxuto: Horários Disponíveis -->
+        <div class="order-1 lg:order-2 lg:col-span-3 bg-charcoal border border-stroke rounded-2xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-xs font-semibold text-silver">Horários Disponíveis</h3>
+              <p id="available-slots-date-label" class="text-[11px] text-muted mt-0.5"></p>
+            </div>
+            <button type="button" onclick="toggleAgendaSlotManager()" class="text-[11px] font-medium text-silver hover:text-white bg-graphite hover:bg-neutral-800 border border-stroke px-2.5 py-1 rounded-lg transition">
+              + Gerenciar
+            </button>
+          </div>
+
+          <!-- Popover / Expansível Discreto para Cadastrar Horários -->
+          <div id="agenda-slot-manager" class="hidden bg-obsidian border border-stroke rounded-xl p-3 space-y-2.5">
+            <form onsubmit="addTimeSlotFromAgenda(event)" class="flex gap-2">
+              <input type="time" id="agenda-new-slot-input" required class="flex-1 bg-charcoal border border-stroke rounded-lg px-2.5 py-1.5 text-xs text-silver focus:outline-none focus:border-neutral-500" />
+              <button type="submit" class="px-3 py-1.5 rounded-lg bg-imperial hover:bg-imperial-hover text-white font-medium text-xs transition">
+                Add
+              </button>
+            </form>
+            <button type="button" onclick="generateDefaultSlotsQuick()" class="w-full text-[11px] text-muted hover:text-silver underline text-left transition">
+              Gerar grade padrão (09:00 às 19:00)
+            </button>
+          </div>
+
+          <!-- Lista de Horários Livres -->
+          <div id="agenda-available-slots" data-hscroll class="flex lg:grid lg:grid-cols-1 gap-1.5 overflow-x-auto lg:overflow-x-visible lg:max-h-[380px] lg:overflow-y-auto pb-1 lg:pb-0 pr-0.5 no-scrollbar snap-x">
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- PÁGINA 3: DASHBOARD DE RESULTADOS (3 GRÁFICOS DE PIZZA)               -->
+    <!-- ===================================================================== -->
+    <section id="tab-dashboard" class="tab-content hidden space-y-6">
+      
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-silver">Dashboard de Resultados</h2>
+          <p class="text-xs text-muted mt-0.5">Visão consolidada dos atendimentos e vendas.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <select id="dash-period-filter" onchange="renderDashboard()" class="bg-charcoal border border-stroke rounded-xl px-3.5 py-2 text-xs font-medium text-silver focus:outline-none focus:border-neutral-500">
+            <option value="all">Todo o Período</option>
+            <option value="month" selected>Mês Atual</option>
+            <option value="week">Semana Atual</option>
+            <option value="today">Hoje</option>
+          </select>
+
+          <div class="bg-charcoal border border-stroke px-4 py-2 rounded-xl text-right">
+            <span class="text-[10px] text-muted block">Faturamento</span>
+            <span id="dash-total-revenue" class="text-sm font-bold text-silver">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 Cards Lado a Lado na Paleta Imperial Barbearia -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Card 1: TOTAL / F. PAGAMENTO -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-silver">Total / F. Pagamento</h3>
+                <p class="text-[11px] text-muted mt-0.5">Receita por meio de pagamento</p>
+              </div>
+              <span id="dash-card1-badge" class="text-xs font-medium text-silver">R$ 0,00</span>
+            </div>
+
+            <div class="relative h-52 w-full flex items-center justify-center my-2">
+              <canvas id="chart-payments"></canvas>
+              <div id="empty-chart-payments" class="hidden absolute inset-0 flex items-center justify-center text-center">
+                <span class="text-xs text-muted">Sem registros no período</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="legend-payments" class="mt-4 pt-3 border-t border-stroke space-y-1.5 text-xs"></div>
+        </div>
+
+        <!-- Card 2: SERVIÇOS (QUANT) -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-silver">Serviços (Quant)</h3>
+                <p class="text-[11px] text-muted mt-0.5">Volume por categoria</p>
+              </div>
+              <span id="dash-card2-badge" class="text-xs font-medium text-silver">0 un.</span>
+            </div>
+
+            <div class="relative h-52 w-full flex items-center justify-center my-2">
+              <canvas id="chart-services"></canvas>
+              <div id="empty-chart-services" class="hidden absolute inset-0 flex items-center justify-center text-center">
+                <span class="text-xs text-muted">Sem serviços no período</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="legend-services" class="mt-4 pt-3 border-t border-stroke space-y-1.5 text-xs"></div>
+        </div>
+
+        <!-- Card 3: PRODUTOS -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-silver">Produtos</h3>
+                <p class="text-[11px] text-muted mt-0.5">Saída de itens</p>
+              </div>
+              <span id="dash-card3-badge" class="text-xs font-medium text-silver">0 un.</span>
+            </div>
+
+            <div class="relative h-52 w-full flex items-center justify-center my-2">
+              <canvas id="chart-products"></canvas>
+              <div id="empty-chart-products" class="hidden absolute inset-0 flex items-center justify-center text-center">
+                <span class="text-xs text-muted">Sem produtos vendidos</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="legend-products" class="mt-4 pt-3 border-t border-stroke space-y-1.5 text-xs"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- PÁGINA 4: CONFIGURAÇÕES (COM SUB-ABAS PARA NÃO POLUIR A TELA)         -->
+    <!-- ===================================================================== -->
+    <section id="tab-config" class="tab-content hidden max-w-3xl mx-auto space-y-6">
+      
+      <div>
+        <h2 class="text-lg font-semibold text-silver">Configurações do Sistema</h2>
+        <p class="text-xs text-muted mt-0.5">Cadastre seus serviços, produtos, formas de pagamento e horários.</p>
+      </div>
+
+      <!-- Sub-abas Internas (Mostra 1 seção por vez) -->
+      <div data-hscroll class="flex flex-nowrap sm:flex-wrap gap-1.5 bg-charcoal p-1.5 rounded-xl border border-stroke overflow-x-auto no-scrollbar [&>button]:whitespace-nowrap [&>button]:shrink-0">
+        <button onclick="switchConfigSubTab('sub-services')" id="btn-sub-services" class="cfg-sub-btn px-3.5 py-2 rounded-lg text-xs font-medium transition">
+          Serviços & Variações
+        </button>
+        <button onclick="switchConfigSubTab('sub-extras-products')" id="btn-sub-extras-products" class="cfg-sub-btn px-3.5 py-2 rounded-lg text-xs font-medium transition">
+          Extras & Produtos
+        </button>
+        <button onclick="switchConfigSubTab('sub-payments-slots')" id="btn-sub-payments-slots" class="cfg-sub-btn px-3.5 py-2 rounded-lg text-xs font-medium transition">
+          Pagamentos & Horários
+        </button>
+        <button onclick="switchConfigSubTab('sub-github')" id="btn-sub-github" class="cfg-sub-btn px-3.5 py-2 rounded-lg text-xs font-medium transition">
+          GitHub (Banco)
+        </button>
+        <button onclick="switchConfigSubTab('sub-dev-json')" id="btn-sub-dev-json" class="cfg-sub-btn px-3.5 py-2 rounded-lg text-xs font-medium transition">
+          Dados / JSON
+        </button>
+      </div>
+
+      <!-- SUB-ABA 1: SERVIÇOS & VARIAÇÕES -->
+      <div id="sub-services" class="cfg-sub-panel bg-charcoal border border-stroke rounded-2xl p-6 space-y-5">
+        <div>
+          <h3 class="text-sm font-semibold text-silver">Categorias de Serviço & Variações</h3>
+          <p class="text-xs text-muted mt-0.5">Crie uma categoria principal (ex: Cabelo) e adicione variações internas (ex: Degradê, Social) ou defina um preço único.</p>
+        </div>
+
+        <form onsubmit="addCategory(event)" class="flex flex-col sm:flex-row gap-2.5">
+          <input type="text" id="cfg-cat-name" required placeholder="Nome do Serviço (ex: Corte)" class="flex-1 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+          <input type="number" step="0.01" min="0" id="cfg-cat-baseprice" placeholder="Preço base (opcional)" class="sm:w-44 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+          <button type="submit" class="px-4 py-2 rounded-xl bg-imperial hover:bg-imperial-hover text-white font-semibold text-xs whitespace-nowrap transition">
+            + Criar
+          </button>
+        </form>
+
+        <div id="cfg-categories-list" class="space-y-3"></div>
+      </div>
+
+      <!-- SUB-ABA 2: EXTRAS & PRODUTOS -->
+      <div id="sub-extras-products" class="cfg-sub-panel hidden space-y-6">
+        <!-- Serviços Extras -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-silver">Serviços Extras</h3>
+            <p class="text-xs text-muted mt-0.5">Adicionais opcionais marcados junto ao atendimento.</p>
+          </div>
+          <form onsubmit="addExtra(event)" class="flex gap-2.5">
+            <input type="text" id="cfg-extra-name" required placeholder="Nome do Extra (ex: Sobrancelha)" class="flex-1 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+            <input type="number" step="0.01" min="0" id="cfg-extra-price" required placeholder="Valor R$" class="w-28 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+            <button type="submit" class="px-4 py-2 rounded-xl bg-imperial hover:bg-imperial-hover text-white font-semibold text-xs transition">+ Add</button>
+          </form>
+          <div id="cfg-extras-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Produtos -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-silver">Produtos</h3>
+            <p class="text-xs text-muted mt-0.5">Itens comercializados na barbearia.</p>
+          </div>
+          <form onsubmit="addProduct(event)" class="flex gap-2.5">
+            <input type="text" id="cfg-prod-name" required placeholder="Nome do Produto (ex: Pomada)" class="flex-1 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+            <input type="number" step="0.01" min="0" id="cfg-prod-price" required placeholder="Valor R$" class="w-28 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+            <button type="submit" class="px-4 py-2 rounded-xl bg-imperial hover:bg-imperial-hover text-white font-semibold text-xs transition">+ Add</button>
+          </form>
+          <div id="cfg-products-list" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- SUB-ABA 3: PAGAMENTOS & HORÁRIOS -->
+      <div id="sub-payments-slots" class="cfg-sub-panel hidden space-y-6">
+        <!-- Formas de Pagamento -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-4">
+          <div>
+            <h3 class="text-sm font-semibold text-silver">Formas de Pagamento</h3>
+            <p class="text-xs text-muted mt-0.5">Opções disponíveis no fechamento do atendimento.</p>
+          </div>
+          <form onsubmit="addPaymentMethod(event)" class="flex gap-2.5">
+            <input type="text" id="cfg-pay-name" required placeholder="Ex: PIX, Dinheiro, Crédito, Débito" class="flex-1 bg-obsidian border border-stroke rounded-xl px-3.5 py-2 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+            <button type="submit" class="px-4 py-2 rounded-xl bg-imperial hover:bg-imperial-hover text-white font-semibold text-xs transition">+ Add</button>
+          </form>
+          <div id="cfg-payments-list" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Grade de Horários -->
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-semibold text-silver">Grade de Horários</h3>
+              <p class="text-xs text-muted mt-0.5">Horários padrão exibidos na agenda diária.</p>
+            </div>
+            <span id="cfg-slots-count" class="text-xs text-muted">0 horários</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <!-- Gerar em Lote -->
+            <div class="bg-obsidian border border-stroke rounded-xl p-3.5 space-y-2.5">
+              <span class="text-[11px] font-medium text-silver block">Gerar intervalo automático</span>
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-[10px] text-muted mb-1">Início</label>
+                  <input type="time" id="cfg-schedule-start" value="09:00" class="w-full bg-charcoal border border-stroke rounded-lg px-2 py-1.5 text-xs text-silver" />
+                </div>
+                <div>
+                  <label class="block text-[10px] text-muted mb-1">Fim</label>
+                  <input type="time" id="cfg-schedule-end" value="20:00" class="w-full bg-charcoal border border-stroke rounded-lg px-2 py-1.5 text-xs text-silver" />
+                </div>
+                <div>
+                  <label class="block text-[10px] text-muted mb-1">Minutos</label>
+                  <input type="number" min="10" max="120" step="5" id="cfg-schedule-interval" value="30" class="w-full bg-charcoal border border-stroke rounded-lg px-2 py-1.5 text-xs text-silver" />
+                </div>
+              </div>
+              <button type="button" onclick="generateBatchSlotsFromConfig()" class="w-full py-1.5 rounded-lg bg-graphite hover:bg-neutral-800 border border-stroke text-silver font-medium text-xs transition">
+                Gerar Horários
+              </button>
+            </div>
+
+            <!-- Adicionar Individual -->
+            <div class="bg-obsidian border border-stroke rounded-xl p-3.5 flex flex-col justify-between space-y-2.5">
+              <span class="text-[11px] font-medium text-silver block">Adicionar horário específico</span>
+              <form onsubmit="addSingleSlotFromConfig(event)" class="flex gap-2">
+                <input type="time" id="cfg-single-slot" required class="flex-1 bg-charcoal border border-stroke rounded-lg px-3 py-1.5 text-xs text-silver" />
+                <button type="submit" class="px-3.5 py-1.5 rounded-lg bg-imperial hover:bg-imperial-hover text-white font-medium text-xs transition">+ Add</button>
+              </form>
+              <p class="text-[10px] text-muted">Você também pode adicionar horários direto na aba Agenda.</p>
+            </div>
+          </div>
+
+          <div id="cfg-slots-list" class="flex flex-wrap gap-1.5 pt-2"></div>
+        </div>
+      </div>
+
+      <!-- SUB-ABA: GITHUB (BANCO DE DADOS PORTÁTIL) -->
+      <div id="sub-github" class="cfg-sub-panel hidden space-y-6">
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-5">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold text-silver">Banco de Dados no GitHub</h3>
+              <p class="text-xs text-muted mt-0.5 leading-relaxed">Seus dados ficam em um arquivo JSON dentro de um repositório seu. Assim você acessa os mesmos registros de qualquer aparelho.</p>
+            </div>
+            <span id="gh-status-pill" class="text-[10px] px-2.5 py-1 rounded-full bg-graphite border border-stroke text-muted whitespace-nowrap">Desconectado</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="sm:col-span-2">
+              <label class="block text-xs text-muted mb-1.5">Token de acesso (fine-grained)</label>
+              <div class="relative">
+                <input type="password" id="gh-token" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_..." class="w-full bg-obsidian border border-stroke rounded-xl pl-3.5 pr-16 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition font-mono" />
+                <button type="button" onclick="toggleGhTokenVisibility()" id="gh-token-toggle" class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted hover:text-silver">Mostrar</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Usuário / organização</label>
+              <input type="text" id="gh-owner" autocapitalize="off" spellcheck="false" placeholder="seu-usuario" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Repositório</label>
+              <input type="text" id="gh-repo" autocapitalize="off" spellcheck="false" placeholder="imperial-dados" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Branch</label>
+              <input type="text" id="gh-branch" autocapitalize="off" spellcheck="false" placeholder="main" value="main" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+            <div>
+              <label class="block text-xs text-muted mb-1.5">Arquivo</label>
+              <input type="text" id="gh-path" autocapitalize="off" spellcheck="false" placeholder="imperial_barbearia_data.json" value="imperial_barbearia_data.json" class="w-full bg-obsidian border border-stroke rounded-xl px-3.5 py-2.5 text-sm text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition" />
+            </div>
+          </div>
+
+          <label class="flex items-start gap-2.5 text-xs text-muted cursor-pointer">
+            <input type="checkbox" id="gh-autosync" checked class="mt-0.5 rounded bg-obsidian border-stroke text-imperial focus:ring-0" />
+            <span>Sincronizar automaticamente a cada alteração <span class="text-neutral-600">(envia ~4s depois de salvar e confere o GitHub ao abrir o app)</span></span>
+          </label>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button type="button" onclick="saveGithubConfigFromForm()" class="col-span-2 py-2.5 rounded-xl bg-imperial hover:bg-imperial-hover text-white font-semibold text-xs transition">Salvar e conectar</button>
+            <button type="button" onclick="githubPush(true)" class="py-2.5 rounded-xl bg-graphite hover:bg-neutral-800 border border-stroke text-silver text-xs font-medium transition">↑ Enviar agora</button>
+            <button type="button" onclick="githubPullInteractive()" class="py-2.5 rounded-xl bg-graphite hover:bg-neutral-800 border border-stroke text-silver text-xs font-medium transition">↓ Baixar do GitHub</button>
+            <button type="button" onclick="githubDisconnect()" class="col-span-2 py-2 rounded-xl text-[11px] text-muted hover:text-red-400 transition">Desconectar e apagar token deste aparelho</button>
+          </div>
+
+          <p id="gh-last-sync" class="text-[11px] text-muted"></p>
+        </div>
+
+        <div class="bg-charcoal border border-stroke rounded-2xl p-6 space-y-2.5">
+          <h4 class="text-xs font-semibold text-silver">Como configurar (uma vez só)</h4>
+          <ol class="list-decimal list-inside space-y-1.5 text-[11px] text-muted leading-relaxed">
+            <li>No GitHub, crie um repositório <span class="text-silver">privado</span> (ex.: <span class="font-mono text-silver">imperial-dados</span>) com um README para ele já ter a branch <span class="font-mono text-silver">main</span>.</li>
+            <li>Vá em <span class="text-silver">Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token</span>.</li>
+            <li>Em <span class="text-silver">Repository access</span> escolha <span class="text-silver">Only select repositories</span> e marque só esse repositório.</li>
+            <li>Em <span class="text-silver">Permissions → Repository permissions</span>, defina <span class="text-silver">Contents: Read and write</span>.</li>
+            <li>Copie o token, cole acima, preencha usuário e repositório e toque em <span class="text-silver">Salvar e conectar</span>.</li>
+            <li>Em outro aparelho: abra o app, repita o preenchimento e toque em <span class="text-silver">Baixar do GitHub</span>.</li>
+          </ol>
+          <p class="text-[11px] text-neutral-500 leading-relaxed">O token fica salvo apenas neste navegador/aparelho (nunca dentro do arquivo de dados nem do backup JSON).</p>
+        </div>
+      </div>
+
+      <!-- SUB-ABA 4: DADOS / JSON (DEV TOOL) -->
+      <div id="sub-dev-json" class="cfg-sub-panel hidden bg-charcoal border border-stroke rounded-2xl p-6 space-y-4">
+        <div data-hscroll-skip class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-silver">Backup & Inspetor de Dados</h3>
+            <p class="text-xs text-muted mt-0.5">Exporte, importe ou inspecione o banco local do navegador.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="exportBackupJSON()" class="px-3 py-1.5 rounded-lg bg-graphite hover:bg-neutral-800 border border-stroke text-xs text-silver transition">
+              Exportar JSON
+            </button>
+            <label class="px-3 py-1.5 rounded-lg bg-graphite hover:bg-neutral-800 border border-stroke text-xs text-silver transition cursor-pointer">
+              Importar JSON
+              <input type="file" accept=".json" onchange="importBackupJSON(event)" class="hidden" />
+            </label>
+            <button onclick="copyDevJSON()" class="px-3 py-1.5 rounded-lg bg-graphite hover:bg-neutral-800 border border-stroke text-xs text-silver transition">
+              Copiar
+            </button>
+            <button onclick="confirmResetAll()" class="px-3 py-1.5 rounded-lg bg-imperial-soft hover:bg-imperial text-red-300 hover:text-white border border-imperial/40 text-xs transition">
+              Zerar Tudo
+            </button>
+          </div>
+        </div>
+
+        <pre id="dev-json-viewer" class="bg-obsidian border border-stroke rounded-xl p-4 text-[11px] font-mono text-muted overflow-x-auto max-h-72"></pre>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    /**
+     * ESTADO GLOBAL DA APLICAÇÃO — IMPERIAL BARBEARIA
+     * Inicia 100% limpo para o usuário cadastrar suas próprias opções.
+     */
+    const STORAGE_KEY = 'imperial_barbearia_db_v1';
+
+    const defaultState = {
+      config: {
+        categories: [], // { id, name, basePrice, variations: [{ id, name, price }] }
+        extras: [],     // { id, name, price }
+        products: [],   // { id, name, price }
+        payments: [],   // { id, name }
+        timeSlots: [],  // ["09:00", "09:30", ...]
+        schedule: {
+          start: '09:00',
+          end: '20:00',
+          interval: 30
+        }
+      },
+      appointments: [], // { id, date, time, clientName, contact, categoryId, categoryName, variationId, variationName, extras: [], products: [], total, paymentMethod }
+      meta: { updatedAt: null }
+    };
+
+    let appState = loadState();
+    let activeTab = 'tab-menu';
+    let activeConfigSubTab = 'sub-services';
+    let agendaFilter = 'daily';
+    let isCustomTimeMode = false;
+    let isExtrasAccordionOpen = false;
+    let editingAppointmentId = null;
+
+    let menuSelection = {
+      categoryId: null,
+      variationId: null,
+      extraIds: [],
+      productQuantities: {},
+      paymentMethod: null
+    };
+
+    let chartInstances = {
+      payments: null,
+      services: null,
+      products: null
+    };
+
+    // =========================================================================
+    // PERSISTÊNCIA & UTILITÁRIOS
+    // =========================================================================
+    function normalizeState(parsed) {
+      return {
+        config: {
+          categories: Array.isArray(parsed?.config?.categories) ? parsed.config.categories : [],
+          extras: Array.isArray(parsed?.config?.extras) ? parsed.config.extras : [],
+          products: Array.isArray(parsed?.config?.products) ? parsed.config.products : [],
+          payments: Array.isArray(parsed?.config?.payments) ? parsed.config.payments : [],
+          timeSlots: Array.isArray(parsed?.config?.timeSlots) ? [...parsed.config.timeSlots].sort() : [],
+          schedule: {
+            start: parsed?.config?.schedule?.start || '09:00',
+            end: parsed?.config?.schedule?.end || '20:00',
+            interval: Number(parsed?.config?.schedule?.interval) || 30
+          }
+        },
+        appointments: Array.isArray(parsed?.appointments) ? parsed.appointments : [],
+        meta: { updatedAt: parsed?.meta?.updatedAt || null }
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return normalizeState(structuredClone(defaultState));
+        return normalizeState(JSON.parse(raw));
+      } catch (e) {
+        return normalizeState(structuredClone(defaultState));
+      }
+    }
+
+    // opts.silent = não marca como "alterado" (usado ao baixar do GitHub) e não dispara auto-sync
+    function saveState(opts = {}) {
+      if (!opts.silent) {
+        appState.meta = appState.meta || {};
+        appState.meta.updatedAt = new Date().toISOString();
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      updateEmptyCatalogHint();
+      updateDevInspector();
+      if (!opts.silent) scheduleGithubAutoPush();
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function haptic(ms = 12) {
+      try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
+    }
+
+    function uid(prefix = 'id') {
+      return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    }
+
+    function formatCurrency(val) {
+      const num = Number(val) || 0;
+      return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function getTodayISO() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatDateBR(isoStr) {
+      if (!isoStr || !isoStr.includes('-')) return isoStr || '-';
+      const [y, m, d] = isoStr.split('-');
+      return `${d}/${m}/${y}`;
+    }
+
+    function showToast(message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'pointer-events-auto px-4 py-2.5 rounded-xl bg-charcoal border border-stroke text-silver text-xs font-medium shadow-2xl transition-all duration-300 translate-y-2 opacity-0';
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 2800);
+    }
+
+    function openConfirmModal(title, message, onConfirm) {
+      const modal = document.getElementById('confirm-modal');
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      const cancelBtn = document.getElementById('confirm-cancel-btn');
+      const okBtn = document.getElementById('confirm-ok-btn');
+
+      const sheet = document.getElementById('confirm-sheet');
+      sheet.style.transform = '';
+      sheet.style.transition = '';
+      sheet.classList.remove('sheet-anim');
+      void sheet.offsetWidth; // reinicia a animação do bottom sheet
+      sheet.classList.add('sheet-anim');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        cancelBtn.onclick = null;
+        okBtn.onclick = null;
+        modal.onclick = null;
+        window.__closeConfirm = null;
+      };
+
+      window.__closeConfirm = cleanup;
+      modal.onclick = e => { if (e.target === modal) cleanup(); };
+      cancelBtn.onclick = cleanup;
+      okBtn.onclick = () => {
+        cleanup();
+        onConfirm();
+      };
+    }
+
+    function updateEmptyCatalogHint() {
+      const isEmpty =
+        appState.config.categories.length === 0 &&
+        appState.config.products.length === 0 &&
+        appState.config.payments.length === 0;
+
+      const hint = document.getElementById('empty-catalog-hint');
+      if (hint) {
+        hint.classList.toggle('hidden', !isEmpty);
+      }
+    }
+
+    // =========================================================================
+    // NAVEGAÇÃO ENTRE PÁGINAS E SUB-ABAS
+    // =========================================================================
+    const TAB_ORDER = ['tab-menu', 'tab-agenda', 'tab-dashboard', 'tab-config'];
+
+    function renderActiveTab() {
+      if (activeTab === 'tab-menu') renderMenu();
+      if (activeTab === 'tab-agenda') renderAgenda();
+      if (activeTab === 'tab-dashboard') renderDashboard();
+      if (activeTab === 'tab-config') renderConfig();
+    }
+
+    function switchTab(tabId) {
+      const prevIdx = TAB_ORDER.indexOf(activeTab);
+      const nextIdx = TAB_ORDER.indexOf(tabId);
+      const changed = tabId !== activeTab;
+      activeTab = tabId;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      const section = document.getElementById(tabId);
+      section.classList.remove('hidden', 'anim-from-left', 'anim-from-right');
+      if (changed && prevIdx > -1) {
+        void section.offsetWidth;
+        section.classList.add(nextIdx > prevIdx ? 'anim-from-right' : 'anim-from-left');
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        haptic(8);
+      }
+
+      // Navegação superior (desktop/tablet)
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-imperial', 'text-white', 'font-semibold');
+        btn.classList.add('text-muted', 'hover:text-silver');
+      });
+      const activeBtn = document.getElementById(`nav-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-muted', 'hover:text-silver');
+        activeBtn.classList.add('bg-imperial', 'text-white', 'font-semibold');
+      }
+
+      // Barra inferior (celular)
+      document.querySelectorAll('.bnav-btn').forEach(btn => {
+        btn.classList.remove('text-silver');
+        btn.classList.add('text-muted');
+        btn.querySelector('.bnav-pill').classList.remove('bg-imperial');
+      });
+      const activeB = document.getElementById(`bnav-${tabId}`);
+      if (activeB) {
+        activeB.classList.remove('text-muted');
+        activeB.classList.add('text-silver');
+        activeB.querySelector('.bnav-pill').classList.add('bg-imperial');
+      }
+
+      renderActiveTab();
+    }
+
+    function switchConfigSubTab(subId) {
+      activeConfigSubTab = subId;
+      if (subId === 'sub-github') fillGithubForm();
+      document.querySelectorAll('.cfg-sub-panel').forEach(el => el.classList.add('hidden'));
+      document.getElementById(subId).classList.remove('hidden');
+
+      document.querySelectorAll('.cfg-sub-btn').forEach(btn => {
+        btn.classList.remove('bg-graphite', 'text-silver');
+        btn.classList.add('text-muted', 'hover:text-silver');
+      });
+
+      const activeBtn = document.getElementById(`btn-${subId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-muted', 'hover:text-silver');
+        activeBtn.classList.add('bg-graphite', 'text-silver');
+      }
+    }
+
+    // =========================================================================
+    // HORÁRIOS CADASTRADOS E DISPONÍVEIS
+    // =========================================================================
+    function registerTimeSlot(timeStr, silent = false) {
+      if (!timeStr) return false;
+      if (!appState.config.timeSlots.includes(timeStr)) {
+        appState.config.timeSlots.push(timeStr);
+        appState.config.timeSlots.sort();
+        saveState();
+        if (!silent) showToast(`Horário ${timeStr} cadastrado.`);
+        return true;
+      }
+      if (!silent) showToast(`Horário ${timeStr} já existe na grade.`);
+      return false;
+    }
+
+    function removeTimeSlot(timeStr) {
+      appState.config.timeSlots = appState.config.timeSlots.filter(t => t !== timeStr);
+      saveState();
+      if (activeTab === 'tab-agenda') renderAgenda();
+      if (activeTab === 'tab-config') renderConfig();
+      if (activeTab === 'tab-menu') populateFormTimeSelect(document.getElementById('form-date').value);
+      showToast(`Horário ${timeStr} removido.`);
+    }
+
+    function generateAllTimeSlots() {
+      return [...appState.config.timeSlots].sort();
+    }
+
+    function getAvailableSlotsForDate(dateISO, ignoreAppointmentId = null) {
+      const allSlots = generateAllTimeSlots();
+      const bookedTimes = new Set(
+        appState.appointments
+          .filter(app => app.date === dateISO && app.id !== ignoreAppointmentId)
+          .map(app => app.time)
+      );
+      return allSlots.filter(slot => !bookedTimes.has(slot));
+    }
+
+    function toggleCustomTimeMode(forceCustom = null) {
+      isCustomTimeMode = forceCustom !== null ? forceCustom : !isCustomTimeMode;
+      const selectWrapper = document.getElementById('form-time-select-wrapper');
+      const customWrapper = document.getElementById('form-time-custom-wrapper');
+      const toggleBtn = document.getElementById('toggle-custom-time-btn');
+
+      if (isCustomTimeMode) {
+        selectWrapper.classList.add('hidden');
+        customWrapper.classList.remove('hidden');
+        toggleBtn.textContent = 'Usar lista';
+      } else {
+        selectWrapper.classList.remove('hidden');
+        customWrapper.classList.add('hidden');
+        toggleBtn.textContent = 'Digitar horário';
+      }
+    }
+
+    // =========================================================================
+    // PÁGINA 1: MENU DE LANÇAMENTO (PROGRESSIVE DISCLOSURE)
+    // =========================================================================
+    function toggleExtrasAccordion(forceOpen = null) {
+      isExtrasAccordionOpen = forceOpen !== null ? forceOpen : !isExtrasAccordionOpen;
+      const panel = document.getElementById('menu-extras-products-panel');
+      const chevron = document.getElementById('accordion-chevron');
+
+      panel.classList.toggle('hidden', !isExtrasAccordionOpen);
+      chevron.classList.toggle('rotate-180', isExtrasAccordionOpen);
+    }
+
+    function updateExtrasProductsBadge() {
+      const badge = document.getElementById('extras-products-badge');
+      const totalExtras = menuSelection.extraIds.length;
+      const totalProds = Object.values(menuSelection.productQuantities).reduce((a, b) => a + b, 0);
+      const totalItems = totalExtras + totalProds;
+
+      if (totalItems > 0) {
+        badge.textContent = `${totalItems} selecionado(s)`;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function renderMenu() {
+      const dateInput = document.getElementById('form-date');
+      if (!dateInput.value) dateInput.value = getTodayISO();
+      populateFormTimeSelect(dateInput.value, editingAppointmentId ? document.getElementById('form-time').value : null);
+
+      // 1. Categorias de Serviço Principal
+      const servicesContainer = document.getElementById('menu-services-container');
+      servicesContainer.innerHTML = '';
+
+      if (appState.config.categories.length === 0) {
+        servicesContainer.innerHTML = `<p class="text-xs text-muted italic">Nenhuma categoria cadastrada.</p>`;
+      } else {
+        if (!editingAppointmentId && !menuSelection.categoryId && appState.config.categories.length > 0) {
+          menuSelection.categoryId = appState.config.categories[0].id;
+        }
+
+        appState.config.categories.forEach(cat => {
+          const isSelected = menuSelection.categoryId === cat.id;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.onclick = () => selectMenuCategory(cat.id);
+          btn.className = `px-3.5 py-2 rounded-xl border text-xs font-medium transition flex items-center gap-2 ${
+            isSelected
+              ? 'bg-imperial border-imperial text-white'
+              : 'bg-obsidian border-stroke text-muted hover:text-silver hover:border-neutral-600'
+          }`;
+
+          const priceHint = cat.variations.length > 0
+            ? ''
+            : ` · ${formatCurrency(cat.basePrice)}`;
+
+          btn.innerHTML = `<span>${cat.name}<span class="opacity-75">${priceHint}</span></span>`;
+          servicesContainer.appendChild(btn);
+        });
+
+        // Opção "Apenas Produto"
+        const isOnlyProd = menuSelection.categoryId === '__ONLY_PRODUCT__';
+        const onlyProdBtn = document.createElement('button');
+        onlyProdBtn.type = 'button';
+        onlyProdBtn.onclick = () => selectMenuCategory('__ONLY_PRODUCT__');
+        onlyProdBtn.className = `px-3.5 py-2 rounded-xl border text-xs font-medium transition ${
+          isOnlyProd
+            ? 'bg-graphite border-neutral-500 text-silver'
+            : 'bg-obsidian border-stroke text-muted hover:text-silver'
+        }`;
+        onlyProdBtn.textContent = 'Só Produto';
+        servicesContainer.appendChild(onlyProdBtn);
+      }
+
+      renderMenuVariations();
+
+      // 2. Serviços Extras
+      const extrasContainer = document.getElementById('menu-extras-container');
+      extrasContainer.innerHTML = '';
+      if (appState.config.extras.length === 0) {
+        extrasContainer.innerHTML = `<p class="text-xs text-muted italic">Nenhum extra cadastrado.</p>`;
+      } else {
+        appState.config.extras.forEach(ext => {
+          const checked = menuSelection.extraIds.includes(ext.id);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.onclick = () => toggleMenuExtra(ext.id);
+          btn.className = `px-3 py-1.5 rounded-xl border text-xs transition ${
+            checked
+              ? 'bg-graphite border-neutral-500 text-silver font-medium'
+              : 'bg-obsidian border-stroke text-muted hover:text-silver'
+          }`;
+          btn.textContent = `${ext.name} (${formatCurrency(ext.price)})`;
+          extrasContainer.appendChild(btn);
+        });
+      }
+
+      // 3. Produtos
+      const productsContainer = document.getElementById('menu-products-container');
+      productsContainer.innerHTML = '';
+      if (appState.config.products.length === 0) {
+        productsContainer.innerHTML = `<p class="text-xs text-muted italic">Nenhum produto cadastrado.</p>`;
+      } else {
+        appState.config.products.forEach(prod => {
+          const qty = menuSelection.productQuantities[prod.id] || 0;
+          const row = document.createElement('div');
+          row.className = `flex items-center justify-between px-3.5 py-2 rounded-xl border text-xs transition ${
+            qty > 0 ? 'bg-obsidian border-neutral-600' : 'bg-obsidian/60 border-stroke'
+          }`;
+          row.innerHTML = `
+            <div>
+              <span class="font-medium text-silver">${prod.name}</span>
+              <span class="text-muted ml-2">${formatCurrency(prod.price)}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="changeProductQty('${prod.id}', -1)" class="w-6 h-6 rounded-lg bg-charcoal hover:bg-graphite border border-stroke text-silver flex items-center justify-center">−</button>
+              <span class="w-4 text-center font-mono text-silver">${qty}</span>
+              <button type="button" onclick="changeProductQty('${prod.id}', 1)" class="w-6 h-6 rounded-lg bg-charcoal hover:bg-graphite border border-stroke text-silver flex items-center justify-center">+</button>
+            </div>
+          `;
+          productsContainer.appendChild(row);
+        });
+      }
+
+      // 4. Formas de Pagamento
+      const paymentsContainer = document.getElementById('menu-payments-container');
+      paymentsContainer.innerHTML = '';
+      if (appState.config.payments.length === 0) {
+        paymentsContainer.innerHTML = `<p class="text-xs text-muted italic">Nenhuma forma cadastrada.</p>`;
+      } else {
+        if (!menuSelection.paymentMethod && appState.config.payments.length > 0) {
+          menuSelection.paymentMethod = appState.config.payments[0].name;
+        }
+        appState.config.payments.forEach(pay => {
+          const isSelected = menuSelection.paymentMethod === pay.name;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.onclick = () => selectMenuPayment(pay.name);
+          btn.className = `px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+            isSelected
+              ? 'bg-imperial border-imperial text-white'
+              : 'bg-obsidian border-stroke text-muted hover:text-silver'
+          }`;
+          btn.textContent = pay.name;
+          paymentsContainer.appendChild(btn);
+        });
+      }
+
+      updateExtrasProductsBadge();
+      recalculateMenuTotal();
+    }
+
+    function selectMenuCategory(catId) {
+      menuSelection.categoryId = catId;
+      menuSelection.variationId = null;
+
+      if (catId === '__ONLY_PRODUCT__') {
+        toggleExtrasAccordion(true);
+      } else {
+        const cat = appState.config.categories.find(c => c.id === catId);
+        if (cat && cat.variations.length > 0) {
+          menuSelection.variationId = cat.variations[0].id;
+        }
+      }
+      renderMenu();
+    }
+
+    function renderMenuVariations() {
+      const wrapper = document.getElementById('menu-variations-wrapper');
+      const container = document.getElementById('menu-variations-container');
+      const title = document.getElementById('menu-variations-title');
+
+      if (!menuSelection.categoryId || menuSelection.categoryId === '__ONLY_PRODUCT__') {
+        wrapper.classList.add('hidden');
+        return;
+      }
+
+      const cat = appState.config.categories.find(c => c.id === menuSelection.categoryId);
+      if (!cat || cat.variations.length === 0) {
+        wrapper.classList.add('hidden');
+        return;
+      }
+
+      wrapper.classList.remove('hidden');
+      title.textContent = `Variações de ${cat.name}`;
+      container.innerHTML = '';
+
+      if (!menuSelection.variationId && cat.variations.length > 0) {
+        menuSelection.variationId = cat.variations[0].id;
+      }
+
+      cat.variations.forEach(v => {
+        const isSelected = menuSelection.variationId === v.id;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => {
+          menuSelection.variationId = v.id;
+          renderMenuVariations();
+          recalculateMenuTotal();
+        };
+        btn.className = `px-3 py-1.5 rounded-xl border text-xs transition ${
+          isSelected
+            ? 'bg-graphite border-neutral-400 text-silver font-medium'
+            : 'bg-obsidian border-stroke text-muted hover:text-silver'
+        }`;
+        btn.textContent = `${v.name} · ${formatCurrency(v.price)}`;
+        container.appendChild(btn);
+      });
+    }
+
+    function toggleMenuExtra(extraId) {
+      const idx = menuSelection.extraIds.indexOf(extraId);
+      if (idx > -1) menuSelection.extraIds.splice(idx, 1);
+      else menuSelection.extraIds.push(extraId);
+      renderMenu();
+    }
+
+    function changeProductQty(prodId, delta) {
+      const current = menuSelection.productQuantities[prodId] || 0;
+      const next = Math.max(0, current + delta);
+      if (next === 0) delete menuSelection.productQuantities[prodId];
+      else menuSelection.productQuantities[prodId] = next;
+      renderMenu();
+    }
+
+    function selectMenuPayment(name) {
+      menuSelection.paymentMethod = name;
+      renderMenu();
+    }
+
+    function recalculateMenuTotal() {
+      let total = 0;
+      const summaryParts = [];
+
+      if (menuSelection.categoryId && menuSelection.categoryId !== '__ONLY_PRODUCT__') {
+        const cat = appState.config.categories.find(c => c.id === menuSelection.categoryId);
+        if (cat) {
+          if (cat.variations.length > 0) {
+            const variation = cat.variations.find(v => v.id === menuSelection.variationId) || cat.variations[0];
+            if (variation) {
+              total += Number(variation.price) || 0;
+              summaryParts.push(`${cat.name} (${variation.name})`);
+            }
+          } else {
+            total += Number(cat.basePrice) || 0;
+            summaryParts.push(`${cat.name}`);
+          }
+        }
+      }
+
+      menuSelection.extraIds.forEach(eid => {
+        const ext = appState.config.extras.find(e => e.id === eid);
+        if (ext) {
+          total += Number(ext.price) || 0;
+          summaryParts.push(`+ ${ext.name}`);
+        }
+      });
+
+      Object.entries(menuSelection.productQuantities).forEach(([pid, qty]) => {
+        const prod = appState.config.products.find(p => p.id === pid);
+        if (prod && qty > 0) {
+          total += (Number(prod.price) || 0) * qty;
+          summaryParts.push(`${qty}x ${prod.name}`);
+        }
+      });
+
+      document.getElementById('form-total').value = total.toFixed(2);
+      const summaryEl = document.getElementById('menu-summary-list');
+      summaryEl.innerHTML = summaryParts.length > 0
+        ? summaryParts.map(item => `<span class="bg-obsidian border border-stroke px-2.5 py-1 rounded-lg text-[11px] text-silver">${item}</span>`).join('')
+        : `<span class="italic text-neutral-600">Nenhum item selecionado</span>`;
+    }
+
+    function populateFormTimeSelect(dateISO, preselectTime = null) {
+      const select = document.getElementById('form-time');
+      const badge = document.getElementById('available-count-badge');
+      const allSlots = generateAllTimeSlots();
+      const available = getAvailableSlotsForDate(dateISO, editingAppointmentId);
+
+      select.innerHTML = '';
+      badge.textContent = `${available.length} livres`;
+
+      if (allSlots.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Sem horários na grade (clique em Digitar horário)';
+        select.appendChild(opt);
+        return;
+      }
+
+      if (available.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'Todos os horários ocupados';
+        select.appendChild(opt);
+        return;
+      }
+
+      available.forEach(slot => {
+        const opt = document.createElement('option');
+        opt.value = slot;
+        opt.textContent = slot;
+        if (preselectTime && slot === preselectTime) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function onFormDateChange() {
+      populateFormTimeSelect(document.getElementById('form-date').value);
+    }
+
+    function resetMenuForm() {
+      editingAppointmentId = null;
+      document.getElementById('editing-indicator').classList.add('hidden');
+      document.getElementById('form-submit-btn').textContent = 'Salvar Lançamento';
+      document.getElementById('form-name').value = '';
+      document.getElementById('form-contact').value = '';
+      document.getElementById('form-time-custom').value = '';
+      toggleCustomTimeMode(false);
+      toggleExtrasAccordion(false);
+      menuSelection.categoryId = null;
+      menuSelection.variationId = null;
+      menuSelection.extraIds = [];
+      menuSelection.productQuantities = {};
+      renderMenu();
+    }
+
+    function handleSaveAppointment(e) {
+      e.preventDefault();
+
+      const date = document.getElementById('form-date').value;
+      const time = isCustomTimeMode
+        ? document.getElementById('form-time-custom').value
+        : document.getElementById('form-time').value;
+      const clientName = document.getElementById('form-name').value.trim();
+      const contact = document.getElementById('form-contact').value.trim() || '-';
+      const total = parseFloat(document.getElementById('form-total').value) || 0;
+
+      if (!date || !time) {
+        showToast('Selecione ou digite um horário.');
+        return;
+      }
+      if (!clientName) {
+        showToast('Informe o nome do cliente.');
+        return;
+      }
+      if (appState.config.payments.length === 0 || !menuSelection.paymentMethod) {
+        showToast('Cadastre e selecione uma Forma de Pagamento em Config.');
+        return;
+      }
+
+      if (isCustomTimeMode && document.getElementById('form-save-custom-slot').checked) {
+        registerTimeSlot(time, true);
+      }
+
+      let categoryId = null;
+      let categoryName = '-';
+      let variationId = null;
+      let variationName = '';
+
+      if (menuSelection.categoryId && menuSelection.categoryId !== '__ONLY_PRODUCT__') {
+        const cat = appState.config.categories.find(c => c.id === menuSelection.categoryId);
+        if (cat) {
+          categoryId = cat.id;
+          categoryName = cat.name;
+          if (cat.variations.length > 0) {
+            const v = cat.variations.find(item => item.id === menuSelection.variationId) || cat.variations[0];
+            if (v) {
+              variationId = v.id;
+              variationName = v.name;
+            }
+          }
+        }
+      }
+
+      const extrasList = menuSelection.extraIds
+        .map(eid => appState.config.extras.find(e => e.id === eid))
+        .filter(Boolean)
+        .map(e => ({ id: e.id, name: e.name, price: e.price }));
+
+      const productsList = Object.entries(menuSelection.productQuantities)
+        .map(([pid, qty]) => {
+          const p = appState.config.products.find(item => item.id === pid);
+          return p && qty > 0 ? { id: p.id, name: p.name, qty, unitPrice: p.price } : null;
+        })
+        .filter(Boolean);
+
+      const record = {
+        id: editingAppointmentId || uid('app'),
+        date,
+        time,
+        clientName,
+        contact,
+        categoryId,
+        categoryName,
+        variationId,
+        variationName,
+        extras: extrasList,
+        products: productsList,
+        total,
+        paymentMethod: menuSelection.paymentMethod
+      };
+
+      if (editingAppointmentId) {
+        const idx = appState.appointments.findIndex(a => a.id === editingAppointmentId);
+        if (idx > -1) appState.appointments[idx] = record;
+        showToast('Lançamento atualizado!');
+      } else {
+        appState.appointments.push(record);
+        showToast('Lançamento salvo com sucesso!');
+      }
+
+      saveState();
+      resetMenuForm();
+    }
+
+    function editAppointment(id) {
+      const app = appState.appointments.find(a => a.id === id);
+      if (!app) return;
+
+      editingAppointmentId = app.id;
+      switchTab('tab-menu');
+
+      document.getElementById('editing-indicator').classList.remove('hidden');
+      document.getElementById('form-submit-btn').textContent = 'Atualizar Lançamento';
+      document.getElementById('form-date').value = app.date;
+      document.getElementById('form-name').value = app.clientName;
+      document.getElementById('form-contact').value = app.contact === '-' ? '' : app.contact;
+
+      menuSelection.categoryId = app.categoryId || '__ONLY_PRODUCT__';
+      menuSelection.variationId = app.variationId || null;
+      menuSelection.extraIds = (app.extras || []).map(e => e.id);
+      menuSelection.productQuantities = {};
+      (app.products || []).forEach(p => {
+        menuSelection.productQuantities[p.id] = p.qty;
+      });
+      menuSelection.paymentMethod = app.paymentMethod;
+
+      if (menuSelection.extraIds.length > 0 || Object.keys(menuSelection.productQuantities).length > 0) {
+        toggleExtrasAccordion(true);
+      }
+
+      renderMenu();
+      document.getElementById('form-total').value = Number(app.total).toFixed(2);
+
+      // Ajustar horário
+      if (appState.config.timeSlots.includes(app.time)) {
+        toggleCustomTimeMode(false);
+        populateFormTimeSelect(app.date, app.time);
+      } else {
+        toggleCustomTimeMode(true);
+        document.getElementById('form-time-custom').value = app.time;
+      }
+    }
+
+    // =========================================================================
+    // PÁGINA 2: AGENDA (DIÁRIO / SEMANAL / MENSAL)
+    // =========================================================================
+    function toggleAgendaSlotManager() {
+      document.getElementById('agenda-slot-manager').classList.toggle('hidden');
+    }
+
+    function setAgendaFilter(mode) {
+      agendaFilter = mode;
+      renderAgenda();
+    }
+
+    function setAgendaToday() {
+      document.getElementById('agenda-date-picker').value = getTodayISO();
+      renderAgenda();
+    }
+
+    function shiftAgendaDate(delta) {
+      const picker = document.getElementById('agenda-date-picker');
+      const current = new Date((picker.value || getTodayISO()) + 'T12:00:00');
+      if (agendaFilter === 'daily') current.setDate(current.getDate() + delta);
+      else if (agendaFilter === 'weekly') current.setDate(current.getDate() + delta * 7);
+      else if (agendaFilter === 'monthly') current.setMonth(current.getMonth() + delta);
+
+      const y = current.getFullYear();
+      const m = String(current.getMonth() + 1).padStart(2, '0');
+      const d = String(current.getDate()).padStart(2, '0');
+      picker.value = `${y}-${m}-${d}`;
+      renderAgenda();
+    }
+
+    function renderAgenda() {
+      const picker = document.getElementById('agenda-date-picker');
+      if (!picker.value) picker.value = getTodayISO();
+      const selectedDate = picker.value;
+
+      document.querySelectorAll('.agenda-filter-btn').forEach(btn => {
+        btn.classList.remove('bg-graphite', 'text-silver', 'font-semibold');
+        btn.classList.add('text-muted', 'hover:text-silver');
+      });
+      const activeBtn = document.getElementById(`filter-${agendaFilter}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-muted', 'hover:text-silver');
+        activeBtn.classList.add('bg-graphite', 'text-silver', 'font-semibold');
+      }
+
+      const refDate = new Date(selectedDate + 'T12:00:00');
+      let filtered = [];
+      let titleText = '';
+      let subText = '';
+
+      if (agendaFilter === 'daily') {
+        filtered = appState.appointments.filter(a => a.date === selectedDate);
+        titleText = `Agenda Diária — ${formatDateBR(selectedDate)}`;
+        subText = 'Atendimentos registrados no dia';
+      } else if (agendaFilter === 'weekly') {
+        const dayOfWeek = refDate.getDay();
+        const startOfWeek = new Date(refDate);
+        startOfWeek.setDate(refDate.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+        const startISO = startOfWeek.toISOString().split('T')[0];
+        const endISO = endOfWeek.toISOString().split('T')[0];
+        filtered = appState.appointments.filter(a => a.date >= startISO && a.date <= endISO);
+        titleText = `Visão Semanal`;
+        subText = `${formatDateBR(startISO)} até ${formatDateBR(endISO)}`;
+      } else {
+        const ymPrefix = selectedDate.slice(0, 7);
+        filtered = appState.appointments.filter(a => a.date.startsWith(ymPrefix));
+        const monthName = refDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        titleText = `Visão Mensal`;
+        subText = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      }
+
+      filtered.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+      document.getElementById('agenda-period-title').textContent = titleText;
+      document.getElementById('agenda-period-subtitle').textContent = subText;
+      document.getElementById('agenda-count-label').textContent = `${filtered.length} atendimento(s)`;
+
+      const sumTotal = filtered.reduce((acc, item) => acc + (Number(item.total) || 0), 0);
+      document.getElementById('agenda-total-label').textContent = formatCurrency(sumTotal);
+
+      const tbody = document.getElementById('agenda-table-body');
+      tbody.innerHTML = '';
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="py-12 px-4 text-center text-muted text-xs">
+              Nenhum atendimento encontrado neste período.
+            </td>
+          </tr>
+        `;
+      } else {
+        filtered.forEach(app => {
+          const serviceText = app.categoryName && app.categoryName !== '-'
+            ? (app.variationName ? `${app.categoryName} (${app.variationName})` : app.categoryName)
+            : '<span class="text-neutral-600">—</span>';
+
+          const extrasText = app.extras && app.extras.length > 0
+            ? app.extras.map(e => e.name).join(', ')
+            : '<span class="text-neutral-600">—</span>';
+
+          const productsText = app.products && app.products.length > 0
+            ? app.products.map(p => `${p.qty}x ${p.name}`).join(', ')
+            : '<span class="text-neutral-600">—</span>';
+
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-obsidian/50 transition';
+          tr.innerHTML = `
+            <td class="py-3 px-4 whitespace-nowrap text-muted">${formatDateBR(app.date)}</td>
+            <td class="py-3 px-4 whitespace-nowrap font-mono font-medium text-silver">${app.time}</td>
+            <td class="py-3 px-4 font-medium text-silver whitespace-nowrap">${app.clientName}</td>
+            <td class="py-3 px-4 text-silver">${serviceText}</td>
+            <td class="py-3 px-4 text-muted">${extrasText}</td>
+            <td class="py-3 px-4 text-muted">${productsText}</td>
+            <td class="py-3 px-4 whitespace-nowrap text-muted">${app.contact || '—'}</td>
+            <td class="py-3 px-4 whitespace-nowrap font-semibold text-silver">${formatCurrency(app.total)}</td>
+            <td class="py-3 px-4 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-md bg-graphite border border-stroke text-[11px] text-silver">
+                ${app.paymentMethod}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right whitespace-nowrap space-x-2">
+              <button onclick="editAppointment('${app.id}')" class="text-[11px] text-muted hover:text-silver transition">Editar</button>
+              <button onclick="deleteAppointment('${app.id}')" class="text-[11px] text-muted hover:text-red-400 transition">Excluir</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      renderAgendaCards(filtered);
+
+      // Painel Lateral: Horários Disponíveis
+      document.getElementById('available-slots-date-label').textContent = formatDateBR(selectedDate);
+      const slotsContainer = document.getElementById('agenda-available-slots');
+      const allSlots = generateAllTimeSlots();
+      const freeSlots = getAvailableSlotsForDate(selectedDate);
+      slotsContainer.innerHTML = '';
+
+      if (allSlots.length === 0) {
+        slotsContainer.innerHTML = `<p class="text-xs text-muted py-2">Nenhum horário cadastrado. Clique em "+ Gerenciar" acima.</p>`;
+      } else if (freeSlots.length === 0) {
+        slotsContainer.innerHTML = `<p class="text-xs text-muted py-2">Todos os horários preenchidos nesta data.</p>`;
+      } else {
+        freeSlots.forEach(slot => {
+          const row = document.createElement('div');
+          row.className = 'shrink-0 snap-start min-w-[112px] lg:min-w-0 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-obsidian border border-stroke hover:border-olive transition group';
+          row.innerHTML = `
+            <button type="button" onclick="quickBookSlot('${selectedDate}', '${slot}')" class="flex-1 flex items-center justify-between text-left">
+              <span class="text-xs font-mono font-medium text-silver">${slot}</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-md bg-olive-soft text-olive-light group-hover:bg-olive group-hover:text-white transition">Livre</span>
+            </button>
+            <button type="button" onclick="removeTimeSlot('${slot}')" class="ml-2 text-neutral-600 hover:text-red-400 text-xs transition" title="Remover horário">✕</button>
+          `;
+          slotsContainer.appendChild(row);
+        });
+      }
+    }
+
+    function renderAgendaCards(list) {
+      const el = document.getElementById('agenda-cards');
+      if (!el) return;
+      if (list.length === 0) {
+        el.innerHTML = `<p class="py-10 text-center text-muted text-xs">Nenhum atendimento encontrado neste período.</p>`;
+        return;
+      }
+      const showDate = agendaFilter !== 'daily';
+      const cards = list.map(app => {
+        const service = app.categoryName && app.categoryName !== '-'
+          ? (app.variationName ? `${app.categoryName} (${app.variationName})` : app.categoryName)
+          : 'Só produto';
+        const extras = (app.extras || []).map(e => e.name).join(', ');
+        const prods = (app.products || []).map(p => `${p.qty}x ${p.name}`).join(', ');
+        const phone = app.contact && app.contact !== '-' ? app.contact : '';
+        const tel = phone.replace(/[^\d+]/g, '');
+        return `
+          <div class="relative overflow-hidden rounded-2xl" data-swipe-row>
+            <div class="absolute inset-y-0 right-0 w-36 flex">
+              <button type="button" onclick="editAppointment('${app.id}')" class="flex-1 bg-graphite text-silver text-xs font-semibold">Editar</button>
+              <button type="button" onclick="deleteAppointment('${app.id}')" class="flex-1 bg-imperial text-white text-xs font-semibold">Excluir</button>
+            </div>
+            <div class="swipe-front relative bg-obsidian border border-stroke rounded-2xl p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-sm font-semibold text-silver">${esc(app.time)}</span>
+                    ${showDate ? `<span class="text-[11px] text-muted">${formatDateBR(app.date)}</span>` : ''}
+                  </div>
+                  <p class="mt-1 text-sm font-medium text-silver truncate">${esc(app.clientName)}</p>
+                  <p class="text-xs text-muted mt-0.5">${esc(service)}</p>
+                  ${extras ? `<p class="text-[11px] text-muted mt-0.5">+ ${esc(extras)}</p>` : ''}
+                  ${prods ? `<p class="text-[11px] text-muted mt-0.5">${esc(prods)}</p>` : ''}
+                </div>
+                <div class="text-right shrink-0">
+                  <p class="text-sm font-semibold text-silver">${formatCurrency(app.total)}</p>
+                  <span class="inline-block mt-1 px-2 py-0.5 rounded-md bg-graphite border border-stroke text-[10px] text-silver">${esc(app.paymentMethod)}</span>
+                </div>
+              </div>
+              ${phone ? `<a href="tel:${esc(tel)}" class="mt-3 inline-flex items-center gap-1.5 text-[11px] text-muted hover:text-silver">Ligar · ${esc(phone)}</a>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+      el.innerHTML = `<p class="text-[10px] text-neutral-600 text-center pb-0.5">Arraste um cartão para o lado para editar ou excluir</p>${cards}`;
+    }
+
+    function addTimeSlotFromAgenda(e) {
+      e.preventDefault();
+      const input = document.getElementById('agenda-new-slot-input');
+      if (!input.value) return;
+      registerTimeSlot(input.value);
+      input.value = '';
+      renderAgenda();
+    }
+
+    function generateDefaultSlotsQuick() {
+      const defaults = [
+        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+        '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+        '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'
+      ];
+      defaults.forEach(t => {
+        if (!appState.config.timeSlots.includes(t)) appState.config.timeSlots.push(t);
+      });
+      appState.config.timeSlots.sort();
+      saveState();
+      renderAgenda();
+      showToast('Grade padrão (09:00 às 19:00) adicionada.');
+    }
+
+    function quickBookSlot(dateISO, timeStr) {
+      resetMenuForm();
+      document.getElementById('form-date').value = dateISO;
+      toggleCustomTimeMode(false);
+      switchTab('tab-menu');
+      populateFormTimeSelect(dateISO, timeStr);
+      document.getElementById('form-name').focus();
+    }
+
+    function deleteAppointment(id) {
+      openConfirmModal(
+        'Excluir Atendimento',
+        'Deseja remover este registro da agenda?',
+        () => {
+          appState.appointments = appState.appointments.filter(a => a.id !== id);
+          saveState();
+          renderAgenda();
+          showToast('Registro excluído.');
+        }
+      );
+    }
+
+    // =========================================================================
+    // PÁGINA 3: DASHBOARD (PALETA IMPERIAL BARBEARIA)
+    // =========================================================================
+    function renderDashboard() {
+      const period = document.getElementById('dash-period-filter').value;
+      const today = getTodayISO();
+      const refDate = new Date(today + 'T12:00:00');
+
+      const filtered = appState.appointments.filter(app => {
+        if (period === 'all') return true;
+        if (period === 'today') return app.date === today;
+        if (period === 'month') return app.date.startsWith(today.slice(0, 7));
+        if (period === 'week') {
+          const day = refDate.getDay();
+          const start = new Date(refDate);
+          start.setDate(refDate.getDate() - day);
+          const end = new Date(start);
+          end.setDate(start.getDate() + 6);
+          return app.date >= start.toISOString().split('T')[0] && app.date <= end.toISOString().split('T')[0];
+        }
+        return true;
+      });
+
+      const totalRevenue = filtered.reduce((acc, a) => acc + (Number(a.total) || 0), 0);
+      document.getElementById('dash-total-revenue').textContent = formatCurrency(totalRevenue);
+      document.getElementById('dash-card1-badge').textContent = formatCurrency(totalRevenue);
+
+      // Paleta elegante da logo Imperial Barbearia (Bordô, Prata, Oliva, Grafite, Vinho)
+      const imperialPalette = [
+        '#8B151B', // Bordô Imperial
+        '#D4D4D4', // Prata
+        '#4E663C', // Verde Oliva
+        '#525252', // Grafite Médio
+        '#A61C23', // Carmesim
+        '#8A9A7B', // Oliva Claro
+        '#A3A3A3'  // Cinza Prata
+      ];
+
+      // 1. TOTAL / F. PAGAMENTO
+      const payMap = {};
+      appState.config.payments.forEach(p => { payMap[p.name] = 0; });
+      filtered.forEach(app => {
+        const key = app.paymentMethod || 'Outros';
+        payMap[key] = (payMap[key] || 0) + (Number(app.total) || 0);
+      });
+      const payEntries = Object.entries(payMap).filter(([, val]) => val > 0);
+      renderPieCard({
+        canvasId: 'chart-payments',
+        emptyId: 'empty-chart-payments',
+        legendId: 'legend-payments',
+        instanceKey: 'payments',
+        entries: payEntries,
+        colors: imperialPalette,
+        formatVal: v => formatCurrency(v)
+      });
+
+      // 2. SERVIÇOS (QUANT)
+      const srvMap = {};
+      appState.config.categories.forEach(c => { srvMap[c.name] = 0; });
+      filtered.forEach(app => {
+        if (app.categoryName && app.categoryName !== '-') {
+          srvMap[app.categoryName] = (srvMap[app.categoryName] || 0) + 1;
+        }
+      });
+      const srvEntries = Object.entries(srvMap).filter(([, val]) => val > 0);
+      const totalSrvCount = srvEntries.reduce((acc, [, v]) => acc + v, 0);
+      document.getElementById('dash-card2-badge').textContent = `${totalSrvCount} un.`;
+      renderPieCard({
+        canvasId: 'chart-services',
+        emptyId: 'empty-chart-services',
+        legendId: 'legend-services',
+        instanceKey: 'services',
+        entries: srvEntries,
+        colors: imperialPalette,
+        formatVal: v => `${v} un.`
+      });
+
+      // 3. PRODUTOS
+      const prodMap = {};
+      appState.config.products.forEach(p => { prodMap[p.name] = 0; });
+      filtered.forEach(app => {
+        (app.products || []).forEach(p => {
+          prodMap[p.name] = (prodMap[p.name] || 0) + (Number(p.qty) || 0);
+        });
+      });
+      const prodEntries = Object.entries(prodMap).filter(([, val]) => val > 0);
+      const totalProdCount = prodEntries.reduce((acc, [, v]) => acc + v, 0);
+      document.getElementById('dash-card3-badge').textContent = `${totalProdCount} un.`;
+      renderPieCard({
+        canvasId: 'chart-products',
+        emptyId: 'empty-chart-products',
+        legendId: 'legend-products',
+        instanceKey: 'products',
+        entries: prodEntries,
+        colors: imperialPalette,
+        formatVal: v => `${v} un.`
+      });
+    }
+
+    function renderPieCard({ canvasId, emptyId, legendId, instanceKey, entries, colors, formatVal }) {
+      const canvas = document.getElementById(canvasId);
+      const emptyEl = document.getElementById(emptyId);
+      const legendEl = document.getElementById(legendId);
+
+      if (chartInstances[instanceKey]) {
+        chartInstances[instanceKey].destroy();
+        chartInstances[instanceKey] = null;
+      }
+
+      if (entries.length === 0) {
+        canvas.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        legendEl.innerHTML = `<p class="text-[11px] text-muted italic">Nenhum dado registrado.</p>`;
+        return;
+      }
+
+      canvas.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      const labels = entries.map(([k]) => k);
+      const data = entries.map(([, v]) => v);
+      const bgColors = entries.map((_, i) => colors[i % colors.length]);
+
+      chartInstances[instanceKey] = new Chart(canvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: bgColors,
+            borderColor: '#161616',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#0D0D0D',
+              titleColor: '#F2F2F2',
+              bodyColor: '#D4D4D4',
+              borderColor: '#282828',
+              borderWidth: 1,
+              callbacks: {
+                label: ctx => ` ${ctx.label}: ${formatVal(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+
+      legendEl.innerHTML = entries.map(([label, val], idx) => {
+        const color = bgColors[idx];
+        return `
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 truncate pr-2">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${color};"></span>
+              <span class="text-muted truncate">${label}</span>
+            </div>
+            <span class="font-medium text-silver shrink-0">${formatVal(val)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // PÁGINA 4: CONFIGURAÇÕES (SUB-ABAS LIMPAS)
+    // =========================================================================
+    function renderConfig() {
+      switchConfigSubTab(activeConfigSubTab);
+
+      // 1. Categorias e Variações
+      const catList = document.getElementById('cfg-categories-list');
+      catList.innerHTML = '';
+
+      if (appState.config.categories.length === 0) {
+        catList.innerHTML = `<p class="text-xs text-muted italic py-4 text-center">Nenhum serviço cadastrado ainda.</p>`;
+      } else {
+        appState.config.categories.forEach(cat => {
+          const card = document.createElement('div');
+          card.className = 'bg-obsidian border border-stroke rounded-xl p-4 space-y-3';
+
+          const variationsHTML = cat.variations.length === 0
+            ? `<p class="text-[11px] text-muted">Sem variações (usa preço base de ${formatCurrency(cat.basePrice)}).</p>`
+            : `<div class="flex flex-wrap gap-1.5">
+                ${cat.variations.map(v => `
+                  <span class="inline-flex items-center gap-2 bg-charcoal border border-stroke px-2.5 py-1 rounded-lg text-xs text-silver">
+                    <span>${v.name} · <span class="text-muted">${formatCurrency(v.price)}</span></span>
+                    <button type="button" onclick="removeVariation('${cat.id}', '${v.id}')" class="text-neutral-600 hover:text-red-400">✕</button>
+                  </span>
+                `).join('')}
+              </div>`;
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-semibold text-silver">${cat.name}</span>
+                ${cat.variations.length === 0 ? `<span class="text-[11px] text-muted ml-2">${formatCurrency(cat.basePrice)}</span>` : ''}
+              </div>
+              <button type="button" onclick="removeCategory('${cat.id}')" class="text-[11px] text-muted hover:text-red-400 transition">Remover</button>
+            </div>
+
+            ${variationsHTML}
+
+            <form onsubmit="addVariation(event, '${cat.id}')" class="flex gap-2 pt-1">
+              <input type="text" name="varName" required placeholder="Nova variação (ex: Degradê)" class="flex-1 bg-charcoal border border-stroke rounded-lg px-3 py-1.5 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+              <input type="number" step="0.01" min="0" name="varPrice" required placeholder="R$" class="w-24 bg-charcoal border border-stroke rounded-lg px-3 py-1.5 text-xs text-silver placeholder-neutral-600 focus:outline-none focus:border-neutral-500" />
+              <button type="submit" class="px-3 py-1.5 rounded-lg bg-graphite hover:bg-neutral-800 border border-stroke text-silver text-xs transition">+ Variação</button>
+            </form>
+          `;
+          catList.appendChild(card);
+        });
+      }
+
+      // 2. Extras
+      const extrasList = document.getElementById('cfg-extras-list');
+      extrasList.innerHTML = appState.config.extras.length === 0
+        ? `<p class="text-xs text-muted italic">Nenhum extra cadastrado.</p>`
+        : appState.config.extras.map(ext => `
+            <div class="flex items-center justify-between bg-obsidian border border-stroke px-3.5 py-2 rounded-xl text-xs">
+              <span class="text-silver">${ext.name} <span class="text-muted ml-1.5">${formatCurrency(ext.price)}</span></span>
+              <button type="button" onclick="removeExtra('${ext.id}')" class="text-neutral-600 hover:text-red-400">✕</button>
+            </div>
+          `).join('');
+
+      // 3. Produtos
+      const prodList = document.getElementById('cfg-products-list');
+      prodList.innerHTML = appState.config.products.length === 0
+        ? `<p class="text-xs text-muted italic">Nenhum produto cadastrado.</p>`
+        : appState.config.products.map(prod => `
+            <div class="flex items-center justify-between bg-obsidian border border-stroke px-3.5 py-2 rounded-xl text-xs">
+              <span class="text-silver">${prod.name} <span class="text-muted ml-1.5">${formatCurrency(prod.price)}</span></span>
+              <button type="button" onclick="removeProduct('${prod.id}')" class="text-neutral-600 hover:text-red-400">✕</button>
+            </div>
+          `).join('');
+
+      // 4. Pagamentos
+      const payList = document.getElementById('cfg-payments-list');
+      payList.innerHTML = appState.config.payments.length === 0
+        ? `<p class="text-xs text-muted italic">Nenhuma forma cadastrada.</p>`
+        : appState.config.payments.map(pay => `
+            <span class="inline-flex items-center gap-2 bg-obsidian border border-stroke px-3 py-1.5 rounded-xl text-xs text-silver">
+              ${pay.name}
+              <button type="button" onclick="removePaymentMethod('${pay.id}')" class="text-neutral-600 hover:text-red-400">✕</button>
+            </span>
+          `).join('');
+
+      // 5. Horários
+      document.getElementById('cfg-schedule-start').value = appState.config.schedule.start;
+      document.getElementById('cfg-schedule-end').value = appState.config.schedule.end;
+      document.getElementById('cfg-schedule-interval').value = appState.config.schedule.interval;
+      document.getElementById('cfg-slots-count').textContent = `${appState.config.timeSlots.length} horário(s)`;
+
+      const slotsList = document.getElementById('cfg-slots-list');
+      slotsList.innerHTML = appState.config.timeSlots.length === 0
+        ? `<p class="text-xs text-muted italic">Nenhum horário cadastrado.</p>`
+        : appState.config.timeSlots.map(slot => `
+            <span class="inline-flex items-center gap-1.5 bg-obsidian border border-stroke px-2.5 py-1 rounded-lg text-xs font-mono text-silver">
+              ${slot}
+              <button type="button" onclick="removeTimeSlot('${slot}')" class="text-neutral-600 hover:text-red-400 font-sans">✕</button>
+            </span>
+          `).join('');
+
+      updateDevInspector();
+    }
+
+    function addCategory(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('cfg-cat-name');
+      const priceInput = document.getElementById('cfg-cat-baseprice');
+      const name = nameInput.value.trim();
+      const basePrice = parseFloat(priceInput.value) || 0;
+      if (!name) return;
+
+      appState.config.categories.push({
+        id: uid('cat'),
+        name,
+        basePrice,
+        variations: []
+      });
+
+      nameInput.value = '';
+      priceInput.value = '';
+      saveState();
+      renderConfig();
+      showToast(`Serviço "${name}" criado.`);
+    }
+
+    function removeCategory(catId) {
+      appState.config.categories = appState.config.categories.filter(c => c.id !== catId);
+      if (menuSelection.categoryId === catId) {
+        menuSelection.categoryId = null;
+        menuSelection.variationId = null;
+      }
+      saveState();
+      renderConfig();
+    }
+
+    function addVariation(e, catId) {
+      e.preventDefault();
+      const form = e.target;
+      const name = form.varName.value.trim();
+      const price = parseFloat(form.varPrice.value) || 0;
+      if (!name) return;
+
+      const cat = appState.config.categories.find(c => c.id === catId);
+      if (cat) {
+        cat.variations.push({ id: uid('var'), name, price });
+        saveState();
+        renderConfig();
+        showToast(`Variação "${name}" adicionada.`);
+      }
+    }
+
+    function removeVariation(catId, varId) {
+      const cat = appState.config.categories.find(c => c.id === catId);
+      if (cat) {
+        cat.variations = cat.variations.filter(v => v.id !== varId);
+        saveState();
+        renderConfig();
+      }
+    }
+
+    function addExtra(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('cfg-extra-name');
+      const priceInput = document.getElementById('cfg-extra-price');
+      const name = nameInput.value.trim();
+      const price = parseFloat(priceInput.value) || 0;
+      if (!name) return;
+
+      appState.config.extras.push({ id: uid('ext'), name, price });
+      nameInput.value = '';
+      priceInput.value = '';
+      saveState();
+      renderConfig();
+      showToast(`Extra "${name}" adicionado.`);
+    }
+
+    function removeExtra(id) {
+      appState.config.extras = appState.config.extras.filter(e => e.id !== id);
+      menuSelection.extraIds = menuSelection.extraIds.filter(eid => eid !== id);
+      saveState();
+      renderConfig();
+    }
+
+    function addProduct(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('cfg-prod-name');
+      const priceInput = document.getElementById('cfg-prod-price');
+      const name = nameInput.value.trim();
+      const price = parseFloat(priceInput.value) || 0;
+      if (!name) return;
+
+      appState.config.products.push({ id: uid('prod'), name, price });
+      nameInput.value = '';
+      priceInput.value = '';
+      saveState();
+      renderConfig();
+      showToast(`Produto "${name}" adicionado.`);
+    }
+
+    function removeProduct(id) {
+      appState.config.products = appState.config.products.filter(p => p.id !== id);
+      delete menuSelection.productQuantities[id];
+      saveState();
+      renderConfig();
+    }
+
+    function addPaymentMethod(e) {
+      e.preventDefault();
+      const nameInput = document.getElementById('cfg-pay-name');
+      const name = nameInput.value.trim();
+      if (!name) return;
+
+      appState.config.payments.push({ id: uid('pay'), name });
+      nameInput.value = '';
+      saveState();
+      renderConfig();
+      showToast(`Forma "${name}" adicionada.`);
+    }
+
+    function removePaymentMethod(id) {
+      appState.config.payments = appState.config.payments.filter(p => p.id !== id);
+      saveState();
+      renderConfig();
+    }
+
+    function addSingleSlotFromConfig(e) {
+      e.preventDefault();
+      const input = document.getElementById('cfg-single-slot');
+      if (!input.value) return;
+      registerTimeSlot(input.value);
+      input.value = '';
+      renderConfig();
+    }
+
+    function generateBatchSlotsFromConfig() {
+      const start = document.getElementById('cfg-schedule-start').value || '09:00';
+      const end = document.getElementById('cfg-schedule-end').value || '20:00';
+      const interval = Math.max(5, parseInt(document.getElementById('cfg-schedule-interval').value, 10) || 30);
+
+      appState.config.schedule = { start, end, interval };
+
+      const [startH, startM] = start.split(':').map(Number);
+      const [endH, endM] = end.split(':').map(Number);
+      let currentMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+
+      let added = 0;
+      while (currentMinutes <= endMinutes) {
+        const hh = String(Math.floor(currentMinutes / 60)).padStart(2, '0');
+        const mm = String(currentMinutes % 60).padStart(2, '0');
+        const slot = `${hh}:${mm}`;
+        if (!appState.config.timeSlots.includes(slot)) {
+          appState.config.timeSlots.push(slot);
+          added++;
+        }
+        currentMinutes += interval;
+      }
+
+      appState.config.timeSlots.sort();
+      saveState();
+      renderConfig();
+      showToast(`${added} horário(s) adicionados.`);
+    }
+
+    function updateDevInspector() {
+      const viewer = document.getElementById('dev-json-viewer');
+      if (viewer) viewer.textContent = JSON.stringify(appState, null, 2);
+    }
+
+    function copyDevJSON() {
+      const text = JSON.stringify(appState, null, 2);
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showToast('JSON copiado.');
+    }
+
+    function exportBackupJSON() {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(appState, null, 2));
+      const a = document.createElement('a');
+      a.href = dataStr;
+      a.download = `imperial_barbearia_${getTodayISO()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function importBackupJSON(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && parsed.config && Array.isArray(parsed.appointments)) {
+            appState = normalizeState(parsed);
+            saveState();
+            renderConfig();
+            showToast('Backup importado!');
+          } else {
+            showToast('Arquivo inválido.');
+          }
+        } catch (err) {
+          showToast('Erro ao ler JSON.');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function confirmResetAll() {
+      openConfirmModal(
+        'Zerar Sistema',
+        'Isso apagará todos os serviços, produtos, horários e lançamentos cadastrados. Deseja continuar?',
+        () => {
+          appState = normalizeState(structuredClone(defaultState));
+          menuSelection = { categoryId: null, variationId: null, extraIds: [], productQuantities: {}, paymentMethod: null };
+          saveState();
+          renderConfig();
+          showToast('Sistema zerado.');
+        }
+      );
+    }
+
+    // =========================================================================
+    // INICIALIZAÇÃO
+    // =========================================================================
+    // =========================================================================
+    // PORTABILIDADE: BANCO DE DADOS NO GITHUB (API "Contents" — sem servidor)
+    // O token e as preferências ficam numa chave separada do localStorage,
+    // então NUNCA entram no JSON dos dados nem no backup exportado.
+    // =========================================================================
+    const GH_CFG_KEY = 'imperial_github_cfg_v1';
+    let ghCfg = loadGhCfg();
+    let ghPushTimer = null;
+    let ghBusy = false;
+    let ghLastError = '';
+    let ghLastAutoCheck = 0;
+
+    function loadGhCfg() {
+      try { return JSON.parse(localStorage.getItem(GH_CFG_KEY)) || null; } catch (e) { return null; }
+    }
+    function saveGhCfg() {
+      if (ghCfg) localStorage.setItem(GH_CFG_KEY, JSON.stringify(ghCfg));
+      else localStorage.removeItem(GH_CFG_KEY);
+    }
+    function isGithubConfigured() {
+      return !!(ghCfg && ghCfg.token && ghCfg.owner && ghCfg.repo && ghCfg.path);
+    }
+    function ghRepoUrl() {
+      return `https://api.github.com/repos/${encodeURIComponent(ghCfg.owner)}/${encodeURIComponent(ghCfg.repo)}`;
+    }
+    function ghFileUrl() {
+      return `${ghRepoUrl()}/contents/${ghCfg.path.split('/').map(encodeURIComponent).join('/')}`;
+    }
+    function ghHeaders(extra = {}) {
+      return {
+        Authorization: `Bearer ${ghCfg.token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...extra
+      };
+    }
+    function utf8ToBase64(str) {
+      const bytes = new TextEncoder().encode(str);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(bin);
+    }
+    function base64ToUtf8(b64) {
+      const bin = atob(b64.replace(/\s/g, ''));
+      return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+    }
+    async function ghError(res) {
+      let msg = '';
+      try { msg = (await res.json()).message || ''; } catch (e) {}
+      if (res.status === 401) return new Error('Token inválido ou expirado.');
+      if (res.status === 403) return new Error('Sem permissão ou limite de uso atingido. O token precisa de "Contents: Read and write".');
+      if (res.status === 404) return new Error('Repositório, branch ou permissão não encontrados.');
+      if (res.status === 409 || res.status === 422) { const e = new Error('Conflito de versão no GitHub.'); e.conflict = true; return e; }
+      return new Error(msg || `Erro ${res.status} do GitHub.`);
+    }
+    function ghFriendly(e) {
+      return e instanceof TypeError ? 'Falha de rede ao falar com o GitHub.' : (e.message || 'Erro desconhecido.');
+    }
+
+    async function ghFetchRemote() {
+      const ref = encodeURIComponent(ghCfg.branch || 'main');
+      const res = await fetch(`${ghFileUrl()}?ref=${ref}`, { headers: ghHeaders(), cache: 'no-store' });
+      if (res.status === 404) return { exists: false };
+      if (!res.ok) throw await ghError(res);
+      const json = await res.json();
+      let text;
+      if (json.content && json.encoding === 'base64') {
+        text = base64ToUtf8(json.content);
+      } else {
+        // arquivos acima de 1 MB não vêm em base64: busca o conteúdo bruto
+        const raw = await fetch(`${ghFileUrl()}?ref=${ref}`, {
+          headers: ghHeaders({ Accept: 'application/vnd.github.raw+json' }), cache: 'no-store'
+        });
+        if (!raw.ok) throw await ghError(raw);
+        text = await raw.text();
+      }
+      return { exists: true, sha: json.sha, data: JSON.parse(text) };
+    }
+
+    // Junta dois estados sem perder lançamentos: une atendimentos por id e horários;
+    // a configuração vem do lado alterado mais recentemente.
+    function mergeStates(local, remote) {
+      const newer = (local.meta?.updatedAt || '') >= (remote.meta?.updatedAt || '') ? local : remote;
+      const byId = new Map();
+      remote.appointments.forEach(a => byId.set(a.id, a));
+      local.appointments.forEach(a => byId.set(a.id, a));
+      const slots = [...new Set([...local.config.timeSlots, ...remote.config.timeSlots])].sort();
+      return normalizeState({
+        config: { ...structuredClone(newer.config), timeSlots: slots },
+        appointments: [...byId.values()],
+        meta: { updatedAt: new Date().toISOString() }
+      });
+    }
+
+    function afterStateReplaced() {
+      updateEmptyCatalogHint();
+      updateDevInspector();
+      renderActiveTab();
+    }
+
+    function setSyncStatus(status) {
+      const map = {
+        off:     { dot: 'bg-neutral-600',             label: 'Local',         pill: 'Desconectado' },
+        dirty:   { dot: 'bg-amber-500',               label: 'Pendente',      pill: 'Alterações pendentes' },
+        syncing: { dot: 'bg-sky-400 animate-pulse',   label: 'Sincronizando', pill: 'Sincronizando…' },
+        ok:      { dot: 'bg-olive-light',             label: 'Sincronizado',  pill: 'Conectado' },
+        error:   { dot: 'bg-red-500',                 label: 'Erro',          pill: 'Erro de sincronização' }
+      };
+      const s = map[status] || map.off;
+      const dot = document.getElementById('sync-dot');
+      if (dot) dot.className = `w-2 h-2 rounded-full ${s.dot}`;
+      const label = document.getElementById('sync-badge-label');
+      if (label) label.textContent = s.label;
+      const pill = document.getElementById('gh-status-pill');
+      if (pill) pill.textContent = s.pill;
+      const last = document.getElementById('gh-last-sync');
+      if (last) {
+        if (status === 'error' && ghLastError) last.textContent = `Erro: ${ghLastError}`;
+        else if (ghCfg?.lastSyncAt) last.textContent = `Última sincronização: ${new Date(ghCfg.lastSyncAt).toLocaleString('pt-BR')}`;
+        else last.textContent = isGithubConfigured() ? 'Ainda não sincronizado.' : '';
+      }
+    }
+
+    function refreshSyncBadge() {
+      if (!isGithubConfigured()) return setSyncStatus('off');
+      const localChanged = (appState.meta?.updatedAt || null) !== (ghCfg.lastLocalTs || null);
+      setSyncStatus(localChanged ? 'dirty' : 'ok');
+    }
+
+    function scheduleGithubAutoPush() {
+      if (!isGithubConfigured()) return;
+      setSyncStatus('dirty');
+      if (!ghCfg.autoSync) return;
+      clearTimeout(ghPushTimer);
+      ghPushTimer = setTimeout(() => githubSync(false), 4000);
+    }
+
+    /**
+     * Sincronização completa (bidirecional):
+     *  - GitHub mudou e este aparelho não  -> baixa
+     *  - este aparelho mudou e o GitHub não -> envia
+     *  - os dois mudaram                     -> mescla e envia
+     * Retorna 'pulled' | 'merged' | 'pushed' | 'uptodate' | false
+     */
+    async function githubSync(interactive = false, retried = false) {
+      if (!isGithubConfigured()) {
+        if (interactive) showToast('Configure o GitHub em Config → GitHub.');
+        return false;
+      }
+      if (ghBusy) { if (interactive) showToast('Sincronização em andamento…'); return false; }
+      if (!navigator.onLine) {
+        ghLastError = 'Sem conexão com a internet.';
+        setSyncStatus('error');
+        if (interactive) showToast('Sem internet. Tentaremos de novo ao reconectar.');
+        return false;
+      }
+
+      ghBusy = true;
+      clearTimeout(ghPushTimer);
+      setSyncStatus('syncing');
+
+      try {
+        const remote = await ghFetchRemote();
+        const localChanged = (appState.meta?.updatedAt || null) !== (ghCfg.lastLocalTs || null);
+        let pulled = false, merged = false;
+
+        if (remote.exists && remote.sha !== ghCfg.lastSha) {
+          const remoteState = normalizeState(remote.data);
+          if (!localChanged) { appState = remoteState; pulled = true; }
+          else { appState = mergeStates(appState, remoteState); merged = true; }
+          saveState({ silent: true });
+          afterStateReplaced();
+        }
+
+        let result = 'uptodate';
+        if (!remote.exists || merged || (localChanged && !pulled)) {
+          if (!appState.meta.updatedAt) { appState.meta.updatedAt = new Date().toISOString(); saveState({ silent: true }); }
+          const sentTs = appState.meta.updatedAt;
+          const body = {
+            message: `Imperial Barbearia: atualização ${new Date().toISOString()}`,
+            content: utf8ToBase64(JSON.stringify(appState, null, 2)),
+            branch: ghCfg.branch || 'main'
+          };
+          if (remote.exists) body.sha = remote.sha;
+          const res = await fetch(ghFileUrl(), {
+            method: 'PUT',
+            headers: ghHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) throw await ghError(res);
+          const out = await res.json();
+          ghCfg.lastSha = out.content.sha;
+          ghCfg.lastLocalTs = sentTs;
+          result = merged ? 'merged' : 'pushed';
+        } else {
+          ghCfg.lastSha = remote.sha;
+          ghCfg.lastLocalTs = appState.meta.updatedAt || null;
+          if (pulled) result = 'pulled';
+        }
+
+        ghCfg.lastSyncAt = Date.now();
+        saveGhCfg();
+        ghLastError = '';
+        ghBusy = false;
+        setSyncStatus('ok');
+
+        const msgs = {
+          pulled: 'Dados atualizados a partir do GitHub.',
+          merged: 'Dados de outro aparelho mesclados e enviados.',
+          pushed: 'Enviado ao GitHub.',
+          uptodate: 'Já está tudo sincronizado.'
+        };
+        if (interactive || result === 'pulled' || result === 'merged') showToast(msgs[result]);
+
+        // houve edição enquanto sincronizava? agenda novo envio
+        if ((appState.meta?.updatedAt || null) !== (ghCfg.lastLocalTs || null)) scheduleGithubAutoPush();
+        return result;
+      } catch (e) {
+        ghBusy = false;
+        if (e.conflict && !retried) return githubSync(interactive, true); // outro aparelho gravou no meio: tenta de novo
+        ghLastError = ghFriendly(e);
+        setSyncStatus('error');
+        if (interactive) showToast(ghLastError);
+        return false;
+      }
+    }
+
+    function githubPullInteractive() {
+      if (!isGithubConfigured()) { showToast('Configure o GitHub primeiro.'); return; }
+      openConfirmModal(
+        'Baixar do GitHub',
+        'Os dados deste aparelho serão substituídos pelos que estão no GitHub. Lançamentos que só existem aqui e não foram enviados serão perdidos. Continuar?',
+        async () => {
+          if (ghBusy) return;
+          ghBusy = true; setSyncStatus('syncing');
+          try {
+            const remote = await ghFetchRemote();
+            if (!remote.exists) { showToast('Ainda não há arquivo no GitHub. Use "Enviar agora".'); setSyncStatus('ok'); return; }
+            appState = normalizeState(remote.data);
+            saveState({ silent: true });
+            ghCfg.lastSha = remote.sha;
+            ghCfg.lastLocalTs = appState.meta.updatedAt || null;
+            ghCfg.lastSyncAt = Date.now();
+            saveGhCfg();
+            ghLastError = '';
+            setSyncStatus('ok');
+            afterStateReplaced();
+            showToast('Dados baixados do GitHub.');
+          } catch (e) {
+            ghLastError = ghFriendly(e);
+            setSyncStatus('error');
+            showToast(ghLastError);
+          } finally {
+            ghBusy = false;
+          }
+        }
+      );
+    }
+
+    function toggleGhTokenVisibility() {
+      const input = document.getElementById('gh-token');
+      const btn = document.getElementById('gh-token-toggle');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? 'Ocultar' : 'Mostrar';
+    }
+
+    function fillGithubForm() {
+      const panel = document.getElementById('sub-github');
+      if (!panel || panel.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+      document.getElementById('gh-token').value = ghCfg?.token || '';
+      document.getElementById('gh-owner').value = ghCfg?.owner || '';
+      document.getElementById('gh-repo').value = ghCfg?.repo || '';
+      document.getElementById('gh-branch').value = ghCfg?.branch || 'main';
+      document.getElementById('gh-path').value = ghCfg?.path || 'imperial_barbearia_data.json';
+      document.getElementById('gh-autosync').checked = ghCfg ? ghCfg.autoSync !== false : true;
+      refreshSyncBadge();
+    }
+
+    async function saveGithubConfigFromForm() {
+      const token = document.getElementById('gh-token').value.trim();
+      let owner = document.getElementById('gh-owner').value.trim();
+      let repo = document.getElementById('gh-repo').value.trim()
+        .replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/$/, '');
+      const branch = document.getElementById('gh-branch').value.trim() || 'main';
+      const path = (document.getElementById('gh-path').value.trim() || 'imperial_barbearia_data.json').replace(/^\/+/, '');
+      const autoSync = document.getElementById('gh-autosync').checked;
+
+      if (repo.includes('/')) { const [o, r] = repo.split('/'); owner = owner || o; repo = r; }
+      if (!token || !owner || !repo) { showToast('Preencha token, usuário e repositório.'); return; }
+
+      const sameTarget = ghCfg && ghCfg.owner === owner && ghCfg.repo === repo && ghCfg.branch === branch && ghCfg.path === path;
+      const previous = ghCfg;
+      ghCfg = {
+        token, owner, repo, branch, path, autoSync,
+        lastSha: sameTarget ? ghCfg.lastSha : null,
+        lastLocalTs: sameTarget ? ghCfg.lastLocalTs : null,
+        lastSyncAt: sameTarget ? ghCfg.lastSyncAt : null
+      };
+
+      setSyncStatus('syncing');
+      try {
+        const repoRes = await fetch(ghRepoUrl(), { headers: ghHeaders(), cache: 'no-store' });
+        if (!repoRes.ok) throw await ghError(repoRes);
+        const repoInfo = await repoRes.json();
+        const brRes = await fetch(`${ghRepoUrl()}/branches/${encodeURIComponent(branch)}`, { headers: ghHeaders(), cache: 'no-store' });
+        if (brRes.status === 404) throw new Error(`A branch "${branch}" não existe. Crie o repositório com um README para ela existir.`);
+        if (!brRes.ok) throw await ghError(brRes);
+
+        const proceed = async () => {
+          saveGhCfg();
+          showToast('GitHub conectado.');
+          await githubSync(true);
+        };
+
+        if (repoInfo.private === false) {
+          ghCfg = previous; setSyncStatus(previous ? 'ok' : 'off');
+          openConfirmModal(
+            'Repositório público',
+            'Este repositório é PÚBLICO: nomes e telefones dos clientes ficariam visíveis para qualquer pessoa. Recomendamos um repositório privado. Conectar mesmo assim?',
+            async () => {
+              ghCfg = { token, owner, repo, branch, path, autoSync, lastSha: null, lastLocalTs: null, lastSyncAt: null };
+              await proceed();
+            }
+          );
+          return;
+        }
+        await proceed();
+      } catch (e) {
+        ghCfg = previous;
+        ghLastError = ghFriendly(e);
+        setSyncStatus('error');
+        showToast(ghLastError);
+      }
+    }
+
+    function githubDisconnect() {
+      openConfirmModal(
+        'Desconectar GitHub',
+        'O token será apagado deste aparelho. Seus dados locais e os do repositório continuam intactos.',
+        () => {
+          clearTimeout(ghPushTimer);
+          ghCfg = null;
+          saveGhCfg();
+          ghLastError = '';
+          fillGithubForm();
+          setSyncStatus('off');
+          showToast('GitHub desconectado.');
+        }
+      );
+    }
+
+    function onSyncBadgeClick() {
+      if (!isGithubConfigured()) {
+        activeConfigSubTab = 'sub-github';
+        switchTab('tab-config');
+        return;
+      }
+      githubSync(true);
+    }
+
+    // Sincroniza ao voltar para o app / reconectar (no máx. a cada 20s)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || !isGithubConfigured() || !ghCfg.autoSync) return;
+      if (Date.now() - ghLastAutoCheck < 20000) return;
+      ghLastAutoCheck = Date.now();
+      githubSync(false);
+    });
+    window.addEventListener('online', () => { if (isGithubConfigured() && ghCfg.autoSync) githubSync(false); });
+    window.addEventListener('offline', () => { if (isGithubConfigured()) { ghLastError = 'Sem conexão com a internet.'; setSyncStatus('error'); } });
+
+    // =========================================================================
+    // GESTOS MOBILE: arrastar p/ os lados (trocar aba), puxar p/ baixo (atualizar),
+    // arrastar cartão (editar/excluir) e arrastar o bottom sheet p/ baixo (fechar)
+    // =========================================================================
+    (function setupGestures() {
+      const ind = document.getElementById('ptr-indicator');
+      const icon = document.getElementById('ptr-icon');
+      const PULL_MAX = 110, PULL_TRIGGER = 60, REVEAL = 144;
+      let g = null, row = null, openRow = null;
+
+      function inHorizontalScroller(el) {
+        while (el && el !== document.body) {
+          if (el.nodeType === 1) {
+            if (el.hasAttribute('data-hscroll')) return true;
+            const ox = getComputedStyle(el).overflowX;
+            if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 2) return true;
+          }
+          el = el.parentElement;
+        }
+        return false;
+      }
+
+      function resetPull() {
+        ind.style.transition = 'opacity .2s ease, transform .2s ease';
+        ind.style.opacity = '0';
+        ind.style.transform = '';
+        icon.style.transform = '';
+      }
+
+      async function startRefresh() {
+        ind.style.transition = 'transform .2s ease';
+        ind.style.transform = 'translate(-50%, 36px)';
+        ind.style.opacity = '1';
+        icon.style.transform = '';
+        icon.classList.add('spin');
+        haptic(15);
+        try {
+          if (isGithubConfigured()) await githubSync(true);
+          else { renderActiveTab(); showToast('Atualizado.'); }
+        } finally {
+          icon.classList.remove('spin');
+          resetPull();
+        }
+      }
+
+      function closeRow(front) {
+        front.style.transform = '';
+        front.dataset.open = '';
+        if (openRow === front) openRow = null;
+      }
+
+      document.addEventListener('touchstart', e => {
+        // --- linhas da agenda (cartões) ---
+        const front = e.target.closest('.swipe-front');
+        if (openRow && front !== openRow) closeRow(openRow);
+        if (front && e.touches.length === 1) {
+          const t = e.touches[0];
+          row = { front, x: t.clientX, y: t.clientY, base: front.dataset.open === '1' ? -REVEAL : 0, dx: 0, locked: null };
+        } else {
+          row = null;
+        }
+
+        // --- gesto de página (trocar aba / puxar para atualizar) ---
+        if (e.touches.length !== 1) { g = null; return; }
+        const t = e.touches[0];
+        const blocked = !!e.target.closest('input,select,textarea,canvas,label,#confirm-modal,[data-swipe-row]') || inHorizontalScroller(e.target);
+        g = { x: t.clientX, y: t.clientY, time: Date.now(), blocked, atTop: window.scrollY <= 0, mode: null, d: 0 };
+      }, { passive: true });
+
+      document.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+
+        if (row) {
+          const dx = t.clientX - row.x, dy = t.clientY - row.y;
+          if (row.locked === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+            row.locked = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+            if (row.locked === 'h') row.front.classList.add('dragging');
+          }
+          if (row.locked === 'h') {
+            row.dx = Math.max(-REVEAL - 24, Math.min(0, row.base + dx));
+            row.front.style.transform = `translateX(${row.dx}px)`;
+          }
+        }
+
+        if (!g) return;
+        const dx = t.clientX - g.x, dy = t.clientY - g.y;
+        if (!g.mode) {
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          g.mode = (Math.abs(dy) > Math.abs(dx) && dy > 0 && g.atTop && !g.blocked) ? 'pull' : 'other';
+        }
+        if (g.mode === 'pull') {
+          if (window.scrollY > 0 || dy <= 0) { g.mode = 'other'; resetPull(); return; }
+          g.d = Math.min(PULL_MAX, dy * 0.5);
+          ind.style.transition = 'none';
+          ind.style.opacity = String(Math.min(1, g.d / PULL_TRIGGER));
+          ind.style.transform = `translate(-50%, ${g.d * 0.6}px)`;
+          icon.style.transform = `rotate(${g.d * 4}deg)`;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', e => {
+        if (row) {
+          const r = row; row = null;
+          r.front.classList.remove('dragging');
+          if (r.locked === 'h') {
+            if (r.dx < -REVEAL / 2) {
+              if (openRow && openRow !== r.front) closeRow(openRow);
+              r.front.style.transform = `translateX(-${REVEAL}px)`;
+              r.front.dataset.open = '1';
+              openRow = r.front;
+              haptic(10);
+            } else {
+              closeRow(r.front);
+            }
+          } else if (r.locked === null && r.front.dataset.open === '1' && !e.target.closest('a')) {
+            closeRow(r.front); // toque no cartão aberto fecha
+          }
+        }
+
+        if (!g) return;
+        const cur = g; g = null;
+        if (cur.mode === 'pull') {
+          if (cur.d >= PULL_TRIGGER) startRefresh(); else resetPull();
+          return;
+        }
+        if (cur.blocked) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - cur.x, dy = t.clientY - cur.y, dt = Date.now() - cur.time;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6 && dt < 700) {
+          const next = TAB_ORDER.indexOf(activeTab) + (dx < 0 ? 1 : -1);
+          if (next >= 0 && next < TAB_ORDER.length) switchTab(TAB_ORDER[next]);
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchcancel', () => {
+        if (g && g.mode === 'pull') resetPull();
+        if (row) { row.front.classList.remove('dragging'); closeRow(row.front); }
+        g = null; row = null;
+      }, { passive: true });
+
+      // Bottom sheet de confirmação: arrastar para baixo fecha
+      const sheet = document.getElementById('confirm-sheet');
+      let sd = null;
+      sheet.addEventListener('touchstart', e => { sd = { y: e.touches[0].clientY, dy: 0 }; sheet.style.transition = 'none'; }, { passive: true });
+      sheet.addEventListener('touchmove', e => {
+        if (!sd) return;
+        sd.dy = Math.max(0, e.touches[0].clientY - sd.y);
+        sheet.style.transform = `translateY(${sd.dy}px)`;
+      }, { passive: true });
+      sheet.addEventListener('touchend', () => {
+        if (!sd) return;
+        sheet.style.transition = 'transform .2s ease';
+        if (sd.dy > 90 && window.__closeConfirm) {
+          sheet.style.transform = 'translateY(100%)';
+          setTimeout(() => window.__closeConfirm && window.__closeConfirm(), 180);
+        } else {
+          sheet.style.transform = '';
+        }
+        sd = null;
+      });
+    })();
+
+    // =========================================================================
+    // APP INSTALÁVEL (PWA): manifesto + ícones gerados na hora
+    // (para instalar, abra o arquivo hospedado em https — ex.: GitHub Pages)
+    // =========================================================================
+    function setupPwa() {
+      try {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#0D0D0D"/><g transform="translate(96 96) scale(10)" fill="none"><path d="M5 22L3.5 11L10.5 15.5L16 8L21.5 15.5L28.5 11L27 22H5Z" fill="#8B151B" stroke="#D4D4D4" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 25H26" stroke="#D4D4D4" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="5.5" r="1.3" fill="#D4D4D4"/><circle cx="3.5" cy="9.5" r="1.1" fill="#D4D4D4"/><circle cx="28.5" cy="9.5" r="1.1" fill="#D4D4D4"/></g></svg>`;
+        const img = new Image();
+        img.onload = () => {
+          const png = size => {
+            const c = document.createElement('canvas');
+            c.width = c.height = size;
+            c.getContext('2d').drawImage(img, 0, 0, size, size);
+            return c.toDataURL('image/png');
+          };
+          const icon192 = png(192), icon512 = png(512);
+
+          const touch = document.createElement('link');
+          touch.rel = 'apple-touch-icon';
+          touch.href = png(180);
+          document.head.appendChild(touch);
+
+          const manifest = {
+            name: 'Imperial Barbearia — Gestão',
+            short_name: 'Imperial',
+            display: 'standalone',
+            orientation: 'portrait',
+            background_color: '#0D0D0D',
+            theme_color: '#0D0D0D',
+            icons: [
+              { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+              { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' }
+            ]
+          };
+          const link = document.createElement('link');
+          link.rel = 'manifest';
+          link.href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
+          document.head.appendChild(link);
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      } catch (e) { /* PWA é opcional */ }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('form-date').value = getTodayISO();
+      document.getElementById('agenda-date-picker').value = getTodayISO();
+      updateEmptyCatalogHint();
+      switchTab('tab-menu');
+      refreshSyncBadge();
+      setupPwa();
+      if (isGithubConfigured() && ghCfg.autoSync) {
+        ghLastAutoCheck = Date.now();
+        setTimeout(() => githubSync(false), 700);
+      }
+    });
+  </script>
+</body>
+</html>
