@@ -1,46 +1,36 @@
-# Login e armazenamento GitHub — Imperial Barbearia
+# Login próprio e banco GitHub — Imperial Barbearia
 
-Esta pasta prepara a camada entre a aplicação e o repositório. O GitHub continua sendo o armazenamento dos dados, no arquivo dados/imperial_barbearia_data.json, mas o navegador não recebe token de acesso ao GitHub.
+## Decisão de arquitetura
 
-## Como funciona
+O login usa usuário e senha próprios, sem conta GitHub para os funcionários. O conteúdo do sistema é gravado no repositório pelo GitHub Contents API. O token técnico do GitHub fica somente como secret no servidor, nunca no navegador ou no código versionado.
 
-1. O usuário entra usando sua conta GitHub (OAuth).
-2. O Worker valida o usuário contra a lista ALLOWED_GITHUB_USERS.
-3. O token OAuth fica guardado no Cloudflare KV, associado a uma sessão em cookie HttpOnly, Secure e SameSite=Lax.
-4. A API lê e grava o JSON no repositório configurado.
-5. O histórico de alterações fica no histórico de commits do GitHub.
+**Não é possível fazer isso com segurança usando apenas GitHub Pages/repositório.** GitHub Pages publica arquivos estáticos e não executa autenticação de servidor. Para proteger a senha e o token de escrita, é necessário um backend. Este projeto usa Cloudflare Worker + KV como camada mínima; o GitHub continua sendo o armazenamento dos dados e o histórico de versões.
 
-**Importante:** para dados de clientes, configure o repositório como privado. Se o repositório for público, o conteúdo salvo nele continuará público, mesmo com login na aplicação. O login não torna privado um repositório público.
+## Configuração necessária
 
-## Implantação (necessária antes de ativar o login)
+1. Torne o repositório privado antes de armazenar dados reais de clientes. Um login no site não esconde arquivos de um repositório público.
+2. Crie um Cloudflare Worker e publique `api/worker.js`.
+3. Crie um namespace KV e vincule-o ao Worker com o nome `SESSIONS`.
+4. Configure os secrets/variáveis no painel do Worker:
+   - `APP_ORIGIN`: origem exata do site publicado (ex.: `https://usuario.github.io`).
+   - `ADMIN_USERNAME`: usuário de acesso da Imperial.
+   - `ADMIN_PASSWORD`: senha forte de acesso da Imperial (guardar como secret, não no GitHub).
+   - `GITHUB_REPO`: `dizaku/dizaku.github.imperial-dados.com`.
+   - `GITHUB_TOKEN`: token técnico fine-grained, com acesso somente a Contents: Read and write neste repositório privado. Guardar somente como secret no Worker.
+5. O endereço do Worker deverá ser configurado na interface do site quando ela for migrada para a API.
 
-1. Crie um OAuth App em GitHub → Settings → Developer settings → OAuth Apps.
-   - Homepage URL: endereço publicado da aplicação.
-   - Authorization callback URL: https://SEU-WORKER.workers.dev/auth/callback (ou domínio próprio do Worker).
-2. Crie um Worker na Cloudflare e associe um namespace KV chamado SESSIONS.
-3. Publique api/worker.js como código do Worker.
-4. Configure os bindings/variáveis:
-   - KV binding: SESSIONS
-   - GITHUB_CLIENT_ID: Client ID do OAuth App
-   - Secret GITHUB_CLIENT_SECRET: Client Secret do OAuth App
-   - GITHUB_REPO: proprietario/repositorio (recomendado: repositório privado)
-   - ALLOWED_GITHUB_USERS: logins GitHub autorizados, separados por vírgula
-   - APP_ORIGIN: origem exata do site, por exemplo https://SEU-USUARIO.github.io
-5. No OAuth App, mantenha o callback exatamente igual ao configurado acima.
+## API
 
-## Endpoints
+- `POST /auth/login` com `{ "username": "...", "password": "..." }` cria sessão protegida por cookie HttpOnly.
+- `POST /auth/logout` encerra a sessão.
+- `GET /api/me` verifica o usuário autenticado.
+- `GET /api/data` lê `dados/imperial_barbearia_data.json`.
+- `PUT /api/data` grava o estado atualizado no GitHub e cria um commit.
 
-- GET /auth/login: inicia o login GitHub.
-- GET /auth/callback: recebe o retorno OAuth e cria a sessão.
-- GET /api/me: informa o usuário autenticado.
-- GET /api/data: lê o JSON de dados.
-- PUT /api/data: grava o JSON de dados.
-- POST /auth/logout: encerra a sessão.
+As chamadas autenticadas devem usar `credentials: "include"`. A API valida a origem do site.
 
-As chamadas /api/* devem ser feitas pelo mesmo site, com cookies incluídos (credentials: include). O Worker rejeita chamadas de outras origens.
+## Importante: ainda não ativado na interface
 
-## Estado desta entrega
+O arquivo `index.html` existente ainda usa localStorage e o mecanismo antigo de sincronização GitHub configurado pelo usuário no navegador. A API acima é uma base de servidor e não passa a proteger o site automaticamente. É necessário migrar a tela de login e as rotinas `loadState`/`saveState` para `/auth/login`, `/api/data` e `/auth/logout`, configurar e publicar o Worker e testar antes de usar com dados reais.
 
-Esta é a camada de servidor preparada, ainda não ativada na interface. A aplicação atual (index.html) continua usando o fluxo antigo de sincronização GitHub/localStorage até que a interface seja migrada para os endpoints acima e o Worker seja implantado com as credenciais e permissões necessárias. Não informe aos usuários que o login está ativo antes dessas etapas e dos testes.
-
-Nunca coloque GITHUB_CLIENT_SECRET, tokens pessoais ou tokens OAuth no repositório.
+Não use pastas com nomes aleatórios como mecanismo de segurança: caminhos ocultos não substituem autenticação. Não grave senhas, tokens pessoais ou dados de clientes em repositório público.
